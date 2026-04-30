@@ -16,8 +16,37 @@ const io = new Server(server, {
   cors: { origin: '*', methods: ['GET', 'POST'] },
 });
 
-// Раздача статики (фронтенд)
-app.use(express.static(path.join(__dirname, 'public')));
+// Раздача статики (фронтенд) с ЯВНЫМ указанием MIME-типов.
+// Это нужно потому что некоторые хостинги (включая Render) иногда отдают
+// CSS/JS как text/plain, и браузер строго отказывается их применять.
+app.use(express.static(path.join(__dirname, 'public'), {
+  setHeaders: (res, filePath) => {
+    const ext = path.extname(filePath).toLowerCase();
+    const mimeTypes = {
+      '.css':   'text/css; charset=utf-8',
+      '.js':    'application/javascript; charset=utf-8',
+      '.html':  'text/html; charset=utf-8',
+      '.json':  'application/json; charset=utf-8',
+      '.png':   'image/png',
+      '.jpg':   'image/jpeg',
+      '.jpeg':  'image/jpeg',
+      '.gif':   'image/gif',
+      '.webp':  'image/webp',
+      '.svg':   'image/svg+xml',
+      '.ico':   'image/x-icon',
+      '.mp3':   'audio/mpeg',
+      '.ogg':   'audio/ogg',
+      '.wav':   'audio/wav',
+      '.mp4':   'video/mp4',
+      '.woff':  'font/woff',
+      '.woff2': 'font/woff2',
+      '.ttf':   'font/ttf',
+    };
+    if (mimeTypes[ext]) {
+      res.setHeader('Content-Type', mimeTypes[ext]);
+    }
+  },
+}));
 
 // Простой healthcheck (нужен для Render/Railway)
 app.get('/health', (_, res) => res.send('ok'));
@@ -27,14 +56,14 @@ app.get('/health', (_, res) => res.send('ok'));
 // =====================================================================
 // 16 карт. Карты, у которых несколько артов, имеют varianty: 1.1, 1.2 …
 const CARD_DEFS = {
-  1: { name: 'Обстоятельства',  count: 5, variants: 5, ability: 'Назови карту (не «Обстоятельства»). Если у соперника она — он выбывает.' },
-  2: { name: 'Свидетель',       count: 2, variants: 2, ability: 'Посмотри карту в руке соперника.' },
-  3: { name: 'Дуэлянт',         count: 2, variants: 2, ability: 'Сравните карты. У кого ниже — выбывает.' },
-  4: { name: 'Защитник',        count: 2, variants: 2, ability: 'До своего следующего хода ты неуязвим.' },
-  5: { name: 'Палач',           count: 2, variants: 2, ability: 'Выбери игрока — он сбрасывает карту и берёт новую.' },
-  6: { name: 'Заговорщик',      count: 1, variants: 1, ability: 'Обменяйся картами с выбранным игроком.' },
-  7: { name: 'Вдова',           count: 1, variants: 1, ability: 'Если на руке также 5 или 6 — обязана быть сброшена. Эффекта нет.' },
-  8: { name: 'Императрица',     count: 1, variants: 1, ability: 'Если сброшена по любой причине — ты выбываешь из раунда.' },
+  1: { name: 'Обстоятельства',  count: 5, variants: 5, ability: 'Назови причину почему не придешь?. Если у соперника она — он выбывает.' },
+  2: { name: 'Чекнуть локу',       count: 2, variants: 2, ability: 'Ну где ты там? Посмотри карту в руке соперника.' },
+  3: { name: 'Моя очередь!',         count: 2, variants: 2, ability: ' Сколько у тебя заряда? Сравните карты. У кого ниже — выбывает.' },
+  4: { name: 'Вернячок',        count: 2, variants: 2, ability: 'Ну точно отпустят. До своего следующего хода ты неуязвим.' },
+  5: { name: 'Vomit',           count: 2, variants: 2, ability: ' Фу, мерзость. Выбери игрока — он сбрасывает карту и берёт новую.' },
+  6: { name: 'Пивас',      count: 1, variants: 1, ability: 'Бро, будешь? Обменяйся картами с выбранным игроком.' },
+  7: { name: 'Ром',           count: 1, variants: 1, ability: 'Если на руке также vomit или пивас — то ром не пьем.' },
+  8: { name: 'Наргила',     count: 1, variants: 1, ability: 'Нет наргилы - нет встречи. Если сброшена по любой причине — ты выбываешь из раунда.' },
 };
 
 function buildDeck() {
