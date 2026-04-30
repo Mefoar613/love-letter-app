@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+<meta name="theme-color" content="#0a0612" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%230a0612'/%3E%3Ctext x='50%25' y='52%25' font-size='44' text-anchor='middle' fill='%23d4a951' font-family='serif' dominant-baseline='middle'%3E%E2%9C%A6%3C/text%3E%3C/svg%3E" />
+<title>Тёмная Дуэль</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,500&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script src="/socket.io/socket.io.js"></script>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<!-- Фоновая музыка (играет с момента первого тапа на заставке и не прерывается) -->
+<audio id="bgm" src="assets/sounds/music.mp3" loop preload="auto"></audio>
+
+<!-- =================== ЗАСТАВКА (комикс с наложением) =================== -->
+<section id="intro" class="screen active">
+  <div class="intro-layer" data-layer="1">
+    <img src="assets/intro/panel1.png" alt="" />
+  </div>
+  <div class="intro-layer" data-layer="2">
+    <img src="assets/intro/panel2.png" alt="" />
+  </div>
+  <div class="intro-layer" data-layer="3">
+    <img src="assets/intro/panel3.png" alt="" />
+  </div>
+  <div class="intro-hint">тапни, чтобы продолжить</div>
+</section>
+
+<!-- =================== ГЛАВНОЕ МЕНЮ =================== -->
+<section id="menu" class="screen">
+  <div class="menu-bg"></div>
+  <header class="menu-header">
+    <div class="logo-mark">✦</div>
+    <h1 class="title">Тёмная Дуэль</h1>
+    <div class="subtitle">карточный поединок на двоих</div>
+  </header>
+
+  <div class="menu-actions">
+    <button class="btn btn-primary" id="btn-invite">
+      <span>Пригласить друга</span>
+      <small>отправить ссылку в Telegram</small>
+    </button>
+    <button class="btn btn-secondary" id="btn-quick">
+      <span>Быстрая партия</span>
+      <small>войти в случайную комнату</small>
+    </button>
+  </div>
+
+  <div class="online-strip">
+    <div class="online-strip-title">Сейчас в игре</div>
+    <div class="online-strip-list" id="online-list">
+      <div class="online-empty">Скоро здесь появятся друзья</div>
+    </div>
+  </div>
+
+  <footer class="menu-footer">v 1.0 · правила одной партии</footer>
+</section>
+
+<!-- =================== ЛОББИ =================== -->
+<section id="lobby" class="screen">
+  <div class="lobby-content">
+    <div class="lobby-spinner"></div>
+    <h2>Ожидание соперника</h2>
+    <div class="lobby-room">Комната: <span id="lobby-room-id">—</span></div>
+    <div class="lobby-players" id="lobby-players"></div>
+    <button class="btn btn-ghost" id="lobby-share">Скопировать ссылку</button>
+    <button class="btn btn-ghost" id="lobby-cancel">Отменить</button>
+  </div>
+</section>
+
+<!-- =================== ИГРА =================== -->
+<section id="game" class="screen">
+  <div class="game-bg"></div>
+
+  <div class="opponent-zone">
+    <div class="player-info">
+      <div class="player-name" id="opp-name">Соперник</div>
+      <div class="player-status" id="opp-status"></div>
+    </div>
+    <div class="opp-hand" id="opp-hand"></div>
+    <div class="discard discard-opp" id="opp-discard"></div>
+  </div>
+
+  <div class="table-zone">
+    <div class="deck" id="deck">
+      <div class="deck-count" id="deck-count">16</div>
+    </div>
+    <div class="log" id="log"></div>
+  </div>
+
+  <div class="discard discard-me" id="me-discard"></div>
+
+  <div class="my-zone">
+    <div class="player-info-row">
+      <div class="player-name" id="me-name">Вы</div>
+      <div class="player-status" id="me-status"></div>
+    </div>
+    <div class="my-hand" id="my-hand"></div>
+  </div>
+
+  <div class="action-modal" id="action-modal">
+    <div class="action-modal-inner">
+      <h3 id="action-title">Выбери</h3>
+      <div class="action-options" id="action-options"></div>
+      <button class="btn btn-ghost" id="action-cancel">Отмена</button>
+    </div>
+  </div>
+
+  <div class="card-tooltip" id="card-tooltip">
+    <div class="tooltip-inner">
+      <div class="tooltip-name" id="tt-name"></div>
+      <div class="tooltip-value" id="tt-value"></div>
+      <div class="tooltip-desc" id="tt-desc"></div>
+    </div>
+  </div>
+
+  <div class="result-overlay" id="result-overlay">
+    <div class="result-inner">
+      <div class="result-glyph" id="result-glyph">✦</div>
+      <h2 id="result-title">Победа</h2>
+      <p id="result-text"></p>
+      <div class="result-actions">
+        <button class="btn btn-primary" id="btn-rematch">Играть ещё</button>
+        <button class="btn btn-ghost" id="btn-to-menu">В меню</button>
+      </div>
+      <div class="result-pending" id="result-pending"></div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <div class="peek-overlay" id="peek-overlay">
+    <div class="peek-inner">
+      <div class="peek-label">У соперника</div>
+      <div class="peek-card" id="peek-card"></div>
+      <button class="btn btn-primary" id="peek-close">Закрыть</button>
+    </div>
+  </div>
+</section>
+
+<script src="app.js"></script>
+</body>
+</html>
