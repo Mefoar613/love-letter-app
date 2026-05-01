@@ -1,7 +1,6 @@
 /* ===================================================================
-   Love Letter Mini App — стили
+   Love Letter Mini App — стили v2
    =================================================================== */
-
 :root {
   --bg-0: #0a0612;
   --bg-1: #16101f;
@@ -13,828 +12,528 @@
   --gold-bright: #f3cc6a;
   --crimson: #8b1e2b;
   --crimson-bright: #c2384a;
-  --emerald: #2f5a4a;
-  --shadow: rgba(0,0,0,0.55);
   --paper: #ede0c2;
-  --paper-dark: #c9b48a;
+  --heart-on:  #e34;
+  --heart-off: rgba(255,255,255,0.12);
+  --card-w: 110px;
+  --card-h: 154px;
+  --card-sm-w: 38px;
+  --card-sm-h: 54px;
 }
 
-* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+*, *::before, *::after { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
 html, body {
-  margin: 0;
-  padding: 0;
-  height: 100%;
+  margin: 0; padding: 0;
+  height: 100%; overflow: hidden;
   background: var(--bg-0);
   color: var(--ink);
   font-family: 'Manrope', system-ui, sans-serif;
-  overflow: hidden;
-  user-select: none;
-  -webkit-user-select: none;
-  touch-action: manipulation;
   font-size: 15px;
+  user-select: none; -webkit-user-select: none;
+  touch-action: manipulation;
 }
-
 body {
   padding-top: env(safe-area-inset-top);
   padding-bottom: env(safe-area-inset-bottom);
 }
+button { font-family: inherit; border: none; cursor: pointer; color: inherit; background: none; }
 
-button {
-  font-family: inherit;
-  border: none;
-  cursor: pointer;
-  color: inherit;
-  background: none;
-}
-
+/* ===== ЭКРАНЫ ===== */
 .screen {
-  position: fixed;
-  inset: 0;
-  display: none;
-  flex-direction: column;
-  overflow: hidden;
+  position: fixed; inset: 0;
+  display: none; flex-direction: column; overflow: hidden;
 }
-.screen.active {
-  display: flex;
-}
+.screen.active { display: flex; }
 
-/* ===================================================================
-   ЗАСТАВКА (комикс с наложением)
-   Каждая картинка — отдельный слой во весь экран.
-   По тапу появляется следующий слой ПОВЕРХ предыдущего.
-   =================================================================== */
-#intro {
-  background: #000;
-  cursor: pointer;
-  position: fixed;
-}
+/* ===== ЗАСТАВКА ===== */
+#intro { background: #000; cursor: pointer; }
 .intro-layer {
-  position: absolute;
-  inset: 0;
-  opacity: 0;
-  transform: scale(1.05);
-  transition: opacity 0.7s ease, transform 0.7s ease;
-  z-index: 1;
+  position: absolute; inset: 0;
+  opacity: 0; transform: scale(1.04);
+  transition: opacity .75s ease, transform .75s ease;
 }
-.intro-layer[data-layer="2"] { z-index: 2; }
-.intro-layer[data-layer="3"] { z-index: 3; }
-.intro-layer.show {
-  opacity: 1;
-  transform: scale(1);
-}
-.intro-layer img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover; /* обрежется по краям, заполнит весь экран */
-  display: block;
-}
+.intro-layer[data-layer="2"]{ z-index:2; }
+.intro-layer[data-layer="3"]{ z-index:3; }
+.intro-layer.show { opacity:1; transform:scale(1); }
+.intro-layer img { width:100%; height:100%; object-fit:cover; display:block; }
 .intro-hint {
-  position: absolute;
-  bottom: calc(20px + env(safe-area-inset-bottom));
-  left: 0;
-  right: 0;
-  z-index: 10;
-  text-align: center;
-  font-size: 12px;
-  letter-spacing: 0.3em;
-  text-transform: uppercase;
-  color: rgba(244, 234, 213, 0.85);
-  text-shadow: 0 2px 8px rgba(0,0,0,0.9);
-  animation: pulse 1.6s ease-in-out infinite;
-  pointer-events: none;
+  position: absolute; bottom: calc(18px + env(safe-area-inset-bottom));
+  left:0; right:0; z-index:10; text-align:center;
+  font-size:11px; letter-spacing:.3em; text-transform:uppercase;
+  color:rgba(244,234,213,.85); text-shadow:0 2px 8px rgba(0,0,0,.9);
+  animation: pulse 1.6s ease-in-out infinite; pointer-events:none;
 }
-@keyframes pulse {
-  0%, 100% { opacity: 0.4; }
-  50% { opacity: 1; }
-}
+@keyframes pulse { 0%,100%{opacity:.35} 50%{opacity:1} }
 
-/* ===================================================================
-   ГЛАВНОЕ МЕНЮ
-   =================================================================== */
-#menu {
-  background: var(--bg-0);
-  padding: 24px 22px calc(20px + env(safe-area-inset-bottom));
-  position: relative;
-}
-
-/* Фон меню: твоя картинка + затемнение поверх для читаемости текста */
+/* ===== МЕНЮ ===== */
+#menu { background:var(--bg-0); padding:24px 22px calc(20px + env(safe-area-inset-bottom)); position:relative; }
 .menu-bg {
-  position: absolute;
-  inset: 0;
+  position:absolute; inset:0; z-index:0;
   background-image:
-    /* затемняющий градиент сверху и снизу */
-    linear-gradient(180deg, rgba(10,6,18,0.55) 0%, rgba(10,6,18,0.35) 40%, rgba(10,6,18,0.85) 100%),
-    /* твоя картинка фона меню */
+    linear-gradient(180deg, rgba(10,6,18,.5) 0%, rgba(10,6,18,.3) 40%, rgba(10,6,18,.88) 100%),
     url('assets/menu-bg.png');
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
-  background-color: var(--bg-0);
-  z-index: 0;
+  background-size:cover; background-position:center; background-color:var(--bg-0);
 }
-.menu-bg::before {
-  /* лёгкая зернистая текстура поверх для атмосферы */
-  content: "";
-  position: absolute;
-  inset: 0;
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' /></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='0.18'/></svg>");
-  mix-blend-mode: overlay;
-  opacity: 0.3;
-  pointer-events: none;
-}
-.menu-header, .menu-actions, .online-strip, .menu-footer {
-  position: relative;
-  z-index: 1;
-}
-.menu-header {
-  text-align: center;
-  margin-top: 12vh;
-}
-.logo-mark {
-  font-size: 42px;
-  color: var(--gold);
-  filter: drop-shadow(0 0 18px rgba(212, 169, 81, 0.65));
-  margin-bottom: 8px;
-}
-.title {
-  font-family: 'Cormorant Garamond', serif;
-  font-weight: 600;
-  font-size: 44px;
-  letter-spacing: 0.04em;
-  margin: 0 0 6px;
-  color: var(--ink);
-  text-shadow: 0 2px 24px rgba(0,0,0,0.8);
-}
-.subtitle {
-  font-size: 12px;
-  letter-spacing: 0.32em;
-  text-transform: uppercase;
-  color: var(--ink-dim);
-  text-shadow: 0 1px 4px rgba(0,0,0,0.8);
-}
-
-.menu-actions {
-  margin-top: 7vh;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
+.menu-header,.menu-actions,.online-strip,.menu-footer { position:relative; z-index:1; }
+.menu-header { text-align:center; margin-top:10vh; }
+.logo-mark { font-size:42px; color:var(--gold); filter:drop-shadow(0 0 18px rgba(212,169,81,.5)); margin-bottom:8px; }
+.title { font-family:'Cormorant Garamond',serif; font-weight:600; font-size:44px; letter-spacing:.04em; margin:0 0 6px; text-shadow:0 2px 24px rgba(0,0,0,.8); }
+.subtitle { font-size:11px; letter-spacing:.32em; text-transform:uppercase; color:var(--ink-dim); text-shadow:0 1px 4px rgba(0,0,0,.8); }
+.menu-actions { margin-top:6vh; display:flex; flex-direction:column; gap:14px; }
 
 /* Кнопки */
-.btn {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  padding: 14px 18px;
-  border-radius: 4px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-align: center;
-  transition: transform .12s ease, box-shadow .12s ease;
-  position: relative;
-}
-.btn span {
-  font-family: 'Cormorant Garamond', serif;
-  font-size: 22px;
-  letter-spacing: 0.06em;
-}
-.btn small {
-  font-size: 10.5px;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: var(--ink-mute);
-  margin-top: 4px;
-  font-weight: 500;
-}
-.btn:active { transform: scale(0.98); }
-.btn-primary {
-  background: linear-gradient(180deg, var(--crimson-bright) 0%, var(--crimson) 100%);
-  color: var(--ink);
-  box-shadow:
-    inset 0 1px 0 rgba(255,255,255,0.15),
-    0 6px 18px rgba(139,30,43,0.4),
-    0 0 0 1px rgba(212,169,81,0.25);
-}
-.btn-primary small { color: rgba(244,234,213,0.7); }
-.btn-secondary {
-  background: rgba(212, 169, 81, 0.12);
-  border: 1px solid rgba(212, 169, 81, 0.5);
-  color: var(--gold-bright);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
-}
-.btn-ghost {
-  background: rgba(0,0,0,0.3);
-  color: var(--ink-dim);
-  border: 1px solid rgba(244, 234, 213, 0.18);
-  font-size: 14px;
-  padding: 11px 14px;
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
-}
-.btn-ghost span, .btn-ghost {
-  font-family: 'Manrope', sans-serif;
-}
+.btn { display:flex; flex-direction:column; align-items:stretch; padding:14px 18px; border-radius:4px; font-weight:600; letter-spacing:.04em; text-align:center; transition:transform .12s ease, box-shadow .12s ease; }
+.btn span { font-family:'Cormorant Garamond',serif; font-size:22px; letter-spacing:.06em; }
+.btn small { font-size:10px; letter-spacing:.22em; text-transform:uppercase; color:var(--ink-mute); margin-top:3px; font-weight:500; }
+.btn:active { transform:scale(.97); }
+.btn-primary { background:linear-gradient(180deg,var(--crimson-bright),var(--crimson)); color:var(--ink); box-shadow:inset 0 1px 0 rgba(255,255,255,.15),0 6px 18px rgba(139,30,43,.4),0 0 0 1px rgba(212,169,81,.25); }
+.btn-primary small { color:rgba(244,234,213,.7); }
+.btn-secondary { background:rgba(212,169,81,.1); border:1px solid rgba(212,169,81,.45); color:var(--gold-bright); backdrop-filter:blur(6px); }
+.btn-ghost { background:rgba(0,0,0,.3); color:var(--ink-dim); border:1px solid rgba(244,234,213,.18); font-size:14px; padding:11px 14px; backdrop-filter:blur(4px); }
 
-.online-strip {
-  margin-top: auto;
-  padding-top: 18px;
-}
-.online-strip-title {
-  font-size: 11px;
-  letter-spacing: 0.3em;
-  text-transform: uppercase;
-  color: var(--ink-dim);
-  margin-bottom: 10px;
-  text-align: center;
-  text-shadow: 0 1px 4px rgba(0,0,0,0.8);
-}
-.online-strip-list {
-  display: flex;
-  gap: 12px;
-  overflow-x: auto;
-  padding-bottom: 4px;
-  scrollbar-width: none;
-}
-.online-strip-list::-webkit-scrollbar { display: none; }
-.online-empty {
-  width: 100%;
-  text-align: center;
-  font-size: 13px;
-  color: var(--ink-dim);
-  padding: 16px 0;
-  font-style: italic;
-  text-shadow: 0 1px 4px rgba(0,0,0,0.8);
-}
-.online-friend {
-  flex-shrink: 0;
-  width: 64px;
-  text-align: center;
-}
-.online-friend-avatar {
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  background: var(--bg-2);
-  border: 2px solid var(--gold);
-  margin: 0 auto 4px;
-  background-size: cover;
-}
-.online-friend-name {
-  font-size: 11px;
-  color: var(--ink-dim);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
+.online-strip { margin-top:auto; padding-top:16px; }
+.online-strip-title { font-size:10px; letter-spacing:.3em; text-transform:uppercase; color:var(--ink-dim); margin-bottom:10px; text-align:center; text-shadow:0 1px 4px rgba(0,0,0,.8); }
+.online-strip-list { display:flex; gap:12px; overflow-x:auto; padding-bottom:4px; scrollbar-width:none; }
+.online-strip-list::-webkit-scrollbar { display:none; }
+.online-empty { width:100%; text-align:center; font-size:13px; color:var(--ink-mute); padding:16px 0; font-style:italic; text-shadow:0 1px 4px rgba(0,0,0,.8); }
+.menu-footer { text-align:center; font-size:10px; letter-spacing:.3em; text-transform:uppercase; color:var(--ink-mute); padding-top:10px; }
 
-.menu-footer {
-  text-align: center;
-  font-size: 10px;
-  letter-spacing: 0.3em;
-  text-transform: uppercase;
-  color: var(--ink-mute);
-  padding-top: 12px;
-}
+/* ===== ЛОББИ ===== */
+#lobby { background:radial-gradient(ellipse at center,var(--bg-1),var(--bg-0)); align-items:center; justify-content:center; padding:24px; }
+.lobby-content { text-align:center; max-width:320px; display:flex; flex-direction:column; align-items:center; gap:16px; }
+.lobby-spinner { width:60px; height:60px; border:2px solid rgba(212,169,81,.2); border-top-color:var(--gold); border-radius:50%; animation:spin 1.2s linear infinite; }
+@keyframes spin { to{transform:rotate(360deg)} }
+#lobby h2 { font-family:'Cormorant Garamond',serif; font-weight:500; font-size:28px; margin:0; }
+.lobby-room { font-size:12px; letter-spacing:.2em; text-transform:uppercase; color:var(--ink-mute); }
+.lobby-room span { color:var(--gold-bright); font-size:16px; }
+.lobby-players { display:flex; gap:18px; justify-content:center; margin:8px 0; }
+.lobby-player { width:80px; text-align:center; }
+.lobby-player-avatar { width:64px; height:64px; border-radius:50%; background:var(--bg-2); border:2px solid var(--gold); margin:0 auto 6px; background-size:cover; background-position:center; }
+.lobby-player-name { font-size:13px; color:var(--ink-dim); }
+.lobby-content > .btn { width:100%; }
 
 /* ===================================================================
-   ЛОББИ
+   ИГРОВОЕ ПОЛЕ — главный новый блок
    =================================================================== */
-#lobby {
-  background: radial-gradient(ellipse at center, var(--bg-1) 0%, var(--bg-0) 100%);
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
+#game { background:var(--bg-0); }
+
+/* Фон стола */
+.table-bg {
+  position:absolute; inset:0; z-index:0;
+  background-image:
+    radial-gradient(ellipse 80% 50% at 50% 50%, rgba(31,21,48,.85) 0%, rgba(10,6,18,.97) 100%),
+    url('assets/table-bg.png');
+  background-size:cover; background-position:center; background-color:#0e0a1a;
 }
-.lobby-content {
-  text-align: center;
-  max-width: 320px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 16px;
+.table-bg::after {
+  content:''; position:absolute; inset:0;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='0.1'/></svg>");
+  mix-blend-mode:overlay; pointer-events:none;
 }
-.lobby-spinner {
-  width: 60px;
-  height: 60px;
-  border: 2px solid rgba(212,169,81,0.2);
-  border-top-color: var(--gold);
-  border-radius: 50%;
-  animation: spin 1.2s linear infinite;
+
+/* Всё поверх фона */
+#game > *:not(.table-bg):not(.overlay) { position:relative; z-index:1; }
+
+/* Две половины экрана */
+.g-half {
+  flex:1;
+  display:flex; flex-direction:column;
+  padding:0 14px;
+  min-height:0;
+  position:relative; z-index:1;
 }
-@keyframes spin { to { transform: rotate(360deg); } }
-#lobby h2 {
-  font-family: 'Cormorant Garamond', serif;
-  font-weight: 500;
-  font-size: 28px;
-  margin: 0;
+.g-top { padding-top:calc(10px + env(safe-area-inset-top)); justify-content:space-between; }
+.g-bottom { padding-bottom:calc(10px + env(safe-area-inset-bottom)); justify-content:space-between; }
+
+/* Лог посередине */
+.g-log-strip {
+  flex:0 0 auto;
+  height:52px;
+  position:relative; z-index:1;
+  display:flex; align-items:center; gap:10px;
+  padding:0 14px;
+  background:rgba(0,0,0,.45);
+  border-top:1px solid rgba(212,169,81,.15);
+  border-bottom:1px solid rgba(212,169,81,.15);
+  cursor:pointer;
 }
-.lobby-room {
-  font-size: 12px;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: var(--ink-mute);
+.g-log-text {
+  flex:1;
+  font-family:'Cormorant Garamond',serif;
+  font-size:14px; font-style:italic;
+  color:var(--ink-dim);
+  overflow:hidden; white-space:nowrap; text-overflow:ellipsis;
 }
-.lobby-room span {
-  color: var(--gold-bright);
-  font-family: 'Cormorant Garamond', serif;
-  font-size: 16px;
-  letter-spacing: 0.1em;
+.g-deck-btn {
+  flex:0 0 auto;
+  display:flex; flex-direction:column; align-items:center;
+  padding:4px 8px; border-radius:4px;
+  background:rgba(212,169,81,.1);
+  border:1px solid rgba(212,169,81,.35);
+  color:var(--gold-bright);
+  cursor:pointer;
+  line-height:1;
 }
-.lobby-players {
-  display: flex;
-  gap: 18px;
-  justify-content: center;
-  margin: 8px 0;
+.deck-icon { font-size:20px; }
+.deck-count { font-size:10px; letter-spacing:.1em; color:var(--ink-mute); margin-top:1px; }
+
+/* Бар игрока (имя + аватар + сердечки) */
+.g-player-bar {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:4px 0;
 }
-.lobby-player {
-  width: 80px;
-  text-align: center;
+.g-av-wrap { display:flex; align-items:center; gap:8px; }
+.g-avatar {
+  width:36px; height:36px; border-radius:50%;
+  background:var(--bg-2); border:1.5px solid var(--gold);
+  background-size:cover; background-position:center;
+  flex-shrink:0;
 }
-.lobby-player-avatar {
-  width: 64px;
-  height: 64px;
-  border-radius: 50%;
-  background: var(--bg-2);
-  border: 2px solid var(--gold);
-  margin: 0 auto 6px;
-  background-size: cover;
-  background-position: center;
+.g-name { font-family:'Cormorant Garamond',serif; font-size:17px; letter-spacing:.04em; }
+.g-status { font-size:9px; letter-spacing:.25em; text-transform:uppercase; color:var(--gold); margin-left:6px; }
+
+/* Сердечки */
+.g-hearts {
+  display:flex; gap:4px; align-items:center;
+  flex-wrap:wrap; justify-content:flex-end;
+  max-width:160px;
 }
-.lobby-player-name {
-  font-size: 13px;
-  color: var(--ink-dim);
+.heart {
+  font-size:15px; line-height:1;
+  transition:transform .3s ease, opacity .3s ease, filter .3s ease;
 }
-.lobby-content > .btn {
-  width: 100%;
+.heart.on  { color:var(--heart-on); filter:drop-shadow(0 0 4px rgba(238,51,68,.6)); }
+.heart.off { color:var(--heart-off); }
+.heart.lose { animation:heartLose .5s ease forwards; }
+@keyframes heartLose {
+  0%  { transform:scale(1.4); filter:drop-shadow(0 0 10px red); }
+  60% { transform:scale(.8); opacity:.5; }
+  100%{ transform:scale(1); opacity:1; color:var(--heart-off); filter:none; }
 }
+
+/* Центр карт */
+.g-card-center {
+  flex:1;
+  display:flex; align-items:center; justify-content:center;
+  position:relative;
+  min-height:0;
+}
+
+/* Строка сброса — маленькие карточки */
+.g-discard-row {
+  display:flex; align-items:center;
+  height:62px; overflow-x:auto; gap:0;
+  scrollbar-width:none;
+  padding:4px 0;
+}
+.g-discard-row::-webkit-scrollbar { display:none; }
 
 /* ===================================================================
-   ИГРОВОЕ ПОЛЕ
+   КАРТА — ключевые стили
    =================================================================== */
-#game {
-  background: var(--bg-0);
-  padding: 0;
-}
-.game-bg {
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(ellipse 60% 40% at 50% 50%, rgba(47,90,74,0.18) 0%, transparent 70%),
-    linear-gradient(180deg, #1a1326 0%, var(--bg-0) 100%);
-  z-index: 0;
-}
-.game-bg::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' /></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='0.12'/></svg>");
-  mix-blend-mode: overlay;
-  pointer-events: none;
-}
-
-#game > * { position: relative; z-index: 1; }
-
-.opponent-zone {
-  flex: 0 0 auto;
-  padding: calc(12px + env(safe-area-inset-top)) 14px 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.player-info {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-size: 13px;
-}
-.player-name {
-  font-family: 'Cormorant Garamond', serif;
-  font-size: 17px;
-  letter-spacing: 0.06em;
-  color: var(--ink);
-}
-.player-status {
-  font-size: 10px;
-  letter-spacing: 0.25em;
-  text-transform: uppercase;
-  color: var(--gold);
-  min-height: 14px;
-}
-.opp-hand {
-  display: flex;
-  justify-content: center;
-  gap: 6px;
-  height: 105px;
-  perspective: 800px;
-}
-
-.table-zone {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 14px;
-  padding: 0 14px;
-  min-height: 0;
-}
-.deck {
-  width: 70px;
-  height: 100px;
-  border-radius: 8px;
-  background:
-    linear-gradient(135deg, #2a1d3d 0%, #1a1024 100%);
-  border: 1px solid rgba(212,169,81,0.4);
-  box-shadow:
-    0 6px 16px rgba(0,0,0,0.5),
-    inset 0 0 20px rgba(212,169,81,0.08);
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.deck::before {
-  content: "✦";
-  position: absolute;
-  font-size: 32px;
-  color: rgba(212, 169, 81, 0.35);
-}
-.deck-count {
-  position: absolute;
-  bottom: -22px;
-  font-size: 11px;
-  letter-spacing: 0.2em;
-  color: var(--ink-mute);
-}
-.log {
-  width: 100%;
-  max-width: 320px;
-  font-family: 'Cormorant Garamond', serif;
-  font-size: 14px;
-  font-style: italic;
-  color: var(--ink-dim);
-  text-align: center;
-  min-height: 60px;
-  max-height: 100px;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  scrollbar-width: none;
-}
-.log::-webkit-scrollbar { display: none; }
-.log-line {
-  opacity: 0;
-  animation: fadeIn .4s ease forwards;
-  padding: 0 8px;
-}
-.log-line.fresh { color: var(--gold-bright); }
-@keyframes fadeIn { to { opacity: 1; } }
-
-.discard {
-  position: absolute;
-  display: flex;
-  gap: 0;
-  z-index: 2;
-}
-.discard-opp {
-  top: 130px;
-  left: 12px;
-  flex-direction: row;
-}
-.discard-me {
-  bottom: 165px;
-  left: 12px;
-  flex-direction: row;
-}
-.discard .card {
-  width: 38px;
-  height: 54px;
-  margin-left: -22px;
-}
-.discard .card:first-child { margin-left: 0; }
-
-.my-zone {
-  flex: 0 0 auto;
-  padding: 8px 14px calc(16px + env(safe-area-inset-bottom));
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.player-info-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-.my-hand {
-  display: flex;
-  justify-content: center;
-  gap: 10px;
-  height: 145px;
-  perspective: 800px;
-}
-
-/* ============= КАРТА ============= */
 .card {
-  width: 95px;
-  height: 135px;
-  border-radius: 8px;
-  position: relative;
-  transition: transform .35s cubic-bezier(.4,0,.2,1);
-  background: transparent;
-  cursor: pointer;
-  flex-shrink: 0;
+  border-radius:8px; position:relative;
+  background:transparent; flex-shrink:0;
+  transition:transform .2s ease, box-shadow .2s ease;
 }
-.card.small { width: 70px; height: 100px; }
-.card.tiny { width: 38px; height: 54px; }
+
+/* Стандартный размер (моя рука) */
+.card--big {
+  width:var(--card-w);
+  height:var(--card-h);
+}
+/* Маленький (сброс, соперник) */
+.card--sm {
+  width:var(--card-sm-w);
+  height:var(--card-sm-h);
+  margin-left:-18px;
+}
+.card--sm:first-child { margin-left:0; }
+
+/* Карта соперника чуть меньше */
+.card--opp {
+  width:calc(var(--card-w) * .88);
+  height:calc(var(--card-h) * .88);
+}
 
 .card-face, .card-back {
-  position: absolute;
-  inset: 0;
-  border-radius: 8px;
-  overflow: hidden;
-  border: 1px solid rgba(212,169,81,0.35);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-  transition: opacity .4s ease;
+  position:absolute; inset:0; border-radius:8px;
+  overflow:hidden;
+  border:1px solid rgba(212,169,81,.4);
+  box-shadow:0 4px 16px rgba(0,0,0,.55);
+  transition:opacity .35s ease;
 }
-
-/* Лицо карты — ТВОЯ КАРТИНКА на весь box. Если её нет — бежевый фон с цифрой. */
-.card-face {
-  background: var(--paper);
-  color: #1a1024;
-  display: flex;
-  flex-direction: column;
-}
-.card-face img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-.card-face .card-corner {
-  position: absolute;
-  top: 4px;
-  left: 6px;
-  font-family: 'Cormorant Garamond', serif;
-  font-size: 18px;
-  font-weight: 600;
-  color: #1a1024;
-  text-shadow:
-    0 0 4px rgba(255,255,255,0.9),
-    0 0 8px rgba(255,255,255,0.5);
-  z-index: 2;
-}
-.card-face .card-corner.br {
-  top: auto; left: auto;
-  bottom: 4px; right: 6px;
-  transform: rotate(180deg);
-}
-
-/* Рубашка — ТВОЯ КАРТИНКА back.png. Если её нет — рисуется CSS-ом (✦ символ). */
+.card-face { background:var(--paper); }
+.card-face img { width:100%; height:100%; object-fit:cover; display:block; }
 .card-back {
-  background:
-    radial-gradient(ellipse at center, #3a2450 0%, #1a1024 100%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  background:radial-gradient(ellipse at center, #3a2450, #1a1024);
+  display:flex; align-items:center; justify-content:center;
 }
 .card-back img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-  position: absolute;
-  inset: 0;
+  position:absolute; inset:0;
+  width:100%; height:100%; object-fit:cover;
 }
 .card-back::before {
-  content: "✦";
-  font-size: 38px;
-  color: var(--gold);
-  text-shadow: 0 0 12px rgba(212,169,81,0.6);
-  position: relative;
-  z-index: 0;
+  content:'✦'; font-size:36px; color:var(--gold);
+  text-shadow:0 0 12px rgba(212,169,81,.6);
+  position:relative; z-index:0;
 }
 .card-back::after {
-  content: "";
-  position: absolute;
-  inset: 6px;
-  border: 1px solid rgba(212,169,81,0.4);
-  border-radius: 5px;
-  pointer-events: none;
-  z-index: 2;
+  content:''; position:absolute; inset:6px;
+  border:1px solid rgba(212,169,81,.35); border-radius:5px; z-index:2; pointer-events:none;
 }
 
-/* По умолчанию карта рубашкой вверх. Класс .face-up показывает лицо. */
-.card .card-back { opacity: 1; z-index: 2; }
-.card .card-face { opacity: 0; z-index: 1; }
-.card.face-up .card-back { opacity: 0; z-index: 1; }
-.card.face-up .card-face { opacity: 1; z-index: 2; }
+/* По умолчанию: рубашка видна, лицо скрыто */
+.card .card-back { opacity:1; z-index:2; }
+.card .card-face { opacity:0; z-index:1; }
+/* Открытая карта */
+.card.face-up .card-back { opacity:0; z-index:1; }
+.card.face-up .card-face { opacity:1; z-index:2; }
 
+/* Цифра в углу карты */
+.card-corner {
+  position:absolute; z-index:3;
+  font-family:'Cormorant Garamond',serif; font-size:17px; font-weight:700;
+  color:#1a1024;
+  text-shadow:0 0 4px rgba(255,255,255,.9),0 0 8px rgba(255,255,255,.5);
+}
+.card-corner.tl { top:4px; left:6px; }
+.card-corner.br { bottom:4px; right:6px; transform:rotate(180deg); }
+
+/* Бейдж с остатком карты в колоде */
+.card-badge {
+  position:absolute; top:3px; right:5px; z-index:4;
+  background:rgba(10,6,18,.82);
+  color:var(--gold-bright);
+  font-size:9px; font-weight:700; letter-spacing:.06em;
+  padding:1px 5px; border-radius:8px;
+  border:1px solid rgba(212,169,81,.4);
+  pointer-events:none;
+  white-space:nowrap;
+}
+
+/* Выбранная карта приподнимается */
+.card.selected {
+  transform:translateY(-10px) scale(1.04);
+  box-shadow:0 16px 32px rgba(212,169,81,.35);
+  z-index:10;
+}
+
+/* Анимация раздачи */
 .card.dealing {
-  animation: dealCard .55s cubic-bezier(.3,1.4,.5,1) backwards;
+  animation:dealCard .6s cubic-bezier(.2,1.3,.5,1) backwards;
 }
 @keyframes dealCard {
-  from {
-    transform: translate(-50vw, -40vh) rotate(-90deg) scale(0.6);
-    opacity: 0;
-  }
-  to { opacity: 1; }
+  from { transform:translate(0,-60vh) rotate(-15deg) scale(.7); opacity:0; }
+  to   { opacity:1; }
 }
 
-.card.playable { cursor: pointer; }
-.card.playable:active { transform: translateY(-6px) scale(1.02); }
-.card.selected {
-  transform: translateY(-12px);
-  box-shadow: 0 12px 28px rgba(212,169,81,0.4);
+/* Анимация сброса карты */
+.card.playing {
+  animation:playCard .45s ease forwards;
 }
-.card.dim { opacity: 0.5; }
-
-/* ============= МОДАЛКИ И ОВЕРЛЕИ ============= */
-.action-modal,
-.peek-overlay,
-.result-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(10, 6, 18, 0.85);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  z-index: 50;
-  display: none;
-  align-items: center;
-  justify-content: center;
-  padding: 22px;
-}
-.action-modal.show,
-.peek-overlay.show,
-.result-overlay.show {
-  display: flex;
-  animation: fadeIn .25s ease;
-}
-.action-modal-inner,
-.peek-inner,
-.result-inner {
-  background: linear-gradient(180deg, var(--bg-2) 0%, var(--bg-1) 100%);
-  border: 1px solid rgba(212, 169, 81, 0.3);
-  border-radius: 8px;
-  padding: 22px;
-  text-align: center;
-  width: 100%;
-  max-width: 320px;
-  box-shadow: 0 12px 40px rgba(0,0,0,0.6);
-}
-.action-modal-inner h3 {
-  font-family: 'Cormorant Garamond', serif;
-  font-weight: 500;
-  font-size: 22px;
-  margin: 0 0 16px;
-  letter-spacing: 0.04em;
-}
-.action-options {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-  margin-bottom: 12px;
-}
-.action-option {
-  padding: 10px 4px;
-  background: rgba(212, 169, 81, 0.1);
-  border: 1px solid rgba(212, 169, 81, 0.35);
-  border-radius: 4px;
-  color: var(--ink);
-  font-size: 12px;
-  text-align: center;
-  cursor: pointer;
-}
-.action-option:active { transform: scale(0.96); }
-.action-option .num {
-  display: block;
-  font-family: 'Cormorant Garamond', serif;
-  font-size: 22px;
-  color: var(--gold-bright);
-  font-weight: 600;
+@keyframes playCard {
+  to { transform:translateY(-30px) scale(.85); opacity:0; }
 }
 
-.card-tooltip {
-  position: fixed;
-  inset: 0;
-  background: rgba(10, 6, 18, 0.92);
-  z-index: 60;
-  display: none;
-  align-items: center;
-  justify-content: center;
-  padding: 30px;
+/* ── Стрелка-кнопка "сыграть" ── */
+.play-arrow-wrap {
+  display:flex; flex-direction:column; align-items:center;
+  gap:4px;
+  position:relative;
 }
-.card-tooltip.show { display: flex; }
-.tooltip-inner {
-  background: var(--paper);
-  color: #1a1024;
-  padding: 22px 20px;
-  border-radius: 6px;
-  border: 2px solid var(--gold);
-  max-width: 300px;
-  width: 100%;
-  box-shadow: 0 0 60px rgba(212,169,81,0.3);
+.play-arrow {
+  width:44px; height:34px;
+  display:flex; align-items:center; justify-content:center;
+  cursor:pointer;
+  position:relative;
+  z-index:20;
 }
-.tooltip-name {
-  font-family: 'Cormorant Garamond', serif;
-  font-size: 26px;
-  font-weight: 600;
-  margin-bottom: 4px;
+.play-arrow::before {
+  content:'';
+  display:block;
+  width:0; height:0;
+  border-left:16px solid transparent;
+  border-right:16px solid transparent;
+  border-bottom:22px solid var(--gold-bright);
+  filter:drop-shadow(0 0 8px rgba(243,204,106,.7)) drop-shadow(0 0 18px rgba(243,204,106,.35));
+  transition:transform .15s ease, filter .15s ease;
 }
-.tooltip-value {
-  font-size: 11px;
-  letter-spacing: 0.3em;
-  text-transform: uppercase;
-  color: #6b4d1a;
-  margin-bottom: 12px;
-}
-.tooltip-desc {
-  font-size: 14px;
-  line-height: 1.5;
-  color: #2a1d3d;
+.play-arrow:active::before {
+  transform:scale(.9);
+  filter:drop-shadow(0 0 12px rgba(243,204,106,1));
 }
 
-.peek-label {
-  font-size: 11px;
-  letter-spacing: 0.3em;
-  text-transform: uppercase;
-  color: var(--ink-mute);
-  margin-bottom: 14px;
+/* ── Стопка с рубашкой позади открытой карты ── */
+.cards-stack {
+  position:relative;
+  display:flex; align-items:center; justify-content:center;
 }
-.peek-card {
-  display: flex;
-  justify-content: center;
-  margin-bottom: 18px;
+.cards-stack .card--big:last-child {
+  /* рубашка-тень за картой */
+  position:absolute;
+  top:8px; left:8px;
+  z-index:0;
+  box-shadow:none;
 }
-.peek-card .card {
-  width: 130px;
-  height: 184px;
-}
+.cards-stack .card--big:first-child { z-index:1; }
 
-.result-glyph {
-  font-size: 56px;
-  color: var(--gold);
-  margin-bottom: 8px;
-  filter: drop-shadow(0 0 30px rgba(212,169,81,0.5));
+/* ===================================================================
+   ОВЕРЛЕИ (зум карты, лог, колода, модалки)
+   =================================================================== */
+.overlay {
+  position:fixed; inset:0; z-index:50;
+  display:none; align-items:center; justify-content:center;
+  background:rgba(10,6,18,.88);
+  backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+  padding:20px;
+  animation:fadeIn .22s ease;
 }
-.result-overlay.lose .result-glyph { color: var(--crimson-bright); }
-.result-inner h2 {
-  font-family: 'Cormorant Garamond', serif;
-  font-size: 36px;
-  margin: 0 0 8px;
-  letter-spacing: 0.05em;
-}
-.result-inner p {
-  color: var(--ink-dim);
-  margin: 0 0 22px;
-  font-size: 14px;
-  font-style: italic;
-}
-.result-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.result-pending {
-  margin-top: 10px;
-  font-size: 11px;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: var(--gold);
-  min-height: 14px;
-}
+.overlay.show { display:flex; }
+@keyframes fadeIn { from{opacity:0;transform:scale(.97)} to{opacity:1;transform:scale(1)} }
 
+/* Зум карты */
+.card-zoom { flex-direction:column; cursor:pointer; }
+.cz-inner {
+  display:flex; flex-direction:column; align-items:center; gap:16px;
+  max-width:300px; width:100%;
+}
+.cz-card {
+  width:170px; height:240px;
+  border-radius:10px; overflow:hidden;
+  border:2px solid var(--gold);
+  box-shadow:0 0 40px rgba(212,169,81,.35);
+  background:var(--paper);
+  position:relative;
+}
+.cz-card img { width:100%; height:100%; object-fit:cover; display:block; }
+.cz-info { text-align:center; }
+.cz-name { font-family:'Cormorant Garamond',serif; font-size:26px; font-weight:600; margin-bottom:4px; }
+.cz-value { font-size:10px; letter-spacing:.3em; text-transform:uppercase; color:var(--ink-mute); margin-bottom:10px; }
+.cz-desc { font-size:14px; line-height:1.55; color:var(--ink-dim); max-width:260px; }
+.cz-remaining { margin-top:8px; font-size:12px; letter-spacing:.1em; color:var(--gold); }
+.cz-close-hint { position:absolute; bottom:calc(16px + env(safe-area-inset-bottom)); font-size:10px; letter-spacing:.3em; text-transform:uppercase; color:var(--ink-mute); animation:pulse 1.6s ease-in-out infinite; }
+
+/* Полный лог */
+.log-overlay { flex-direction:column; cursor:pointer; align-items:stretch; }
+.lo-inner {
+  flex:1; max-width:380px; width:100%; margin:0 auto;
+  display:flex; flex-direction:column; gap:12px;
+  overflow:hidden;
+  background:rgba(22,16,31,.95); border:1px solid rgba(212,169,81,.25);
+  border-radius:8px; padding:20px;
+}
+.lo-title, .do-inner .lo-title {
+  font-family:'Cormorant Garamond',serif; font-size:20px; text-align:center;
+  color:var(--gold); letter-spacing:.06em;
+}
+.lo-list {
+  flex:1; overflow-y:auto; display:flex; flex-direction:column-reverse; gap:6px;
+  scrollbar-width:thin; scrollbar-color:rgba(212,169,81,.2) transparent;
+}
+.lo-entry {
+  font-family:'Cormorant Garamond',serif; font-size:15px; font-style:italic;
+  color:var(--ink-dim); padding:4px 0; border-bottom:1px solid rgba(255,255,255,.06);
+}
+.lo-entry:first-child { color:var(--gold-bright); }
+
+/* Просмотр колоды */
+.deck-overlay { flex-direction:column; cursor:pointer; }
+.do-inner {
+  max-width:340px; width:100%; max-height:80vh; overflow-y:auto;
+  background:rgba(22,16,31,.95); border:1px solid rgba(212,169,81,.25);
+  border-radius:8px; padding:18px;
+  display:flex; flex-direction:column; gap:12px;
+}
+.do-grid {
+  display:grid; grid-template-columns:1fr 1fr; gap:8px;
+}
+.do-card-row {
+  display:flex; align-items:center; gap:10px;
+  padding:8px 10px; border-radius:4px;
+  background:rgba(212,169,81,.07); border:1px solid rgba(212,169,81,.2);
+}
+.do-mini {
+  width:34px; height:48px; border-radius:4px; overflow:hidden; flex-shrink:0;
+  background:var(--paper);
+  border:1px solid rgba(212,169,81,.3);
+}
+.do-mini img { width:100%; height:100%; object-fit:cover; display:block; }
+.do-info { flex:1; }
+.do-name { font-size:11px; font-weight:600; color:var(--ink); }
+.do-cnt  { font-size:18px; font-family:'Cormorant Garamond',serif; color:var(--gold-bright); font-weight:700; }
+.do-zero { opacity:.3; }
+
+/* Модалки (угадай, цель) */
+.action-modal, .target-modal { flex-direction:column; }
+.am-inner {
+  max-width:320px; width:100%;
+  background:linear-gradient(180deg,var(--bg-2),var(--bg-1));
+  border:1px solid rgba(212,169,81,.3); border-radius:8px;
+  padding:22px; text-align:center;
+  box-shadow:0 12px 40px rgba(0,0,0,.6);
+  display:flex; flex-direction:column; gap:12px;
+}
+.am-title {
+  font-family:'Cormorant Garamond',serif; font-size:22px;
+  letter-spacing:.04em; color:var(--ink);
+}
+.am-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+.am-grid--2 { grid-template-columns:1fr 1fr; }
+.am-opt {
+  padding:10px 4px;
+  background:rgba(212,169,81,.08); border:1px solid rgba(212,169,81,.3);
+  border-radius:4px; color:var(--ink); font-size:11px; cursor:pointer;
+  transition:background .15s; text-align:center;
+}
+.am-opt:active { background:rgba(212,169,81,.2); }
+.am-opt .num { display:block; font-family:'Cormorant Garamond',serif; font-size:22px; color:var(--gold-bright); font-weight:700; }
+
+/* Peek */
+.peek-overlay { flex-direction:column; }
+.peek-card-wrap { display:flex; justify-content:center; margin:8px 0; }
+.peek-card-wrap .card--big { width:140px; height:196px; }
+
+/* Конец раунда */
+.round-over, .game-over { flex-direction:column; cursor:default; }
+.ro-inner {
+  max-width:320px; width:100%; text-align:center;
+  background:rgba(22,16,31,.97); border:1px solid rgba(212,169,81,.3);
+  border-radius:10px; padding:28px 22px;
+  display:flex; flex-direction:column; gap:10px; align-items:center;
+  box-shadow:0 16px 48px rgba(0,0,0,.7);
+}
+.ro-glyph {
+  font-size:52px; color:var(--gold);
+  filter:drop-shadow(0 0 24px rgba(212,169,81,.6));
+}
+.game-over .ro-glyph { color:var(--crimson-bright); }
+.ro-title { font-family:'Cormorant Garamond',serif; font-size:32px; font-weight:600; margin:0; }
+.ro-sub { font-size:14px; color:var(--ink-dim); font-style:italic; }
+.ro-hearts-row { display:flex; gap:6px; font-size:20px; margin:4px 0; }
+.ro-auto { font-size:11px; letter-spacing:.2em; text-transform:uppercase; color:var(--ink-mute); margin-top:4px; }
+.result-actions { display:flex; flex-direction:column; gap:10px; width:100%; }
+
+/* Тост */
 .toast {
-  position: fixed;
-  bottom: calc(80px + env(safe-area-inset-bottom));
-  left: 50%;
-  transform: translateX(-50%) translateY(20px);
-  background: rgba(10, 6, 18, 0.95);
-  border: 1px solid var(--crimson);
-  color: var(--ink);
-  padding: 10px 18px;
-  border-radius: 4px;
-  font-size: 13px;
-  z-index: 100;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity .2s ease, transform .2s ease;
-  max-width: 80%;
-  text-align: center;
+  position:fixed; bottom:calc(80px + env(safe-area-inset-bottom));
+  left:50%; transform:translateX(-50%) translateY(16px);
+  background:rgba(10,6,18,.96); border:1px solid var(--crimson);
+  color:var(--ink); padding:10px 18px; border-radius:4px;
+  font-size:13px; z-index:200; opacity:0; pointer-events:none;
+  transition:opacity .2s, transform .2s; max-width:82%; text-align:center;
 }
-.toast.show {
-  opacity: 1;
-  transform: translateX(-50%) translateY(0);
-}
+.toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
 
-@media (max-height: 680px) {
-  .menu-header { margin-top: 6vh; }
-  .menu-actions { margin-top: 4vh; }
-  .title { font-size: 38px; }
-  .my-hand { height: 130px; }
-  .card { width: 88px; height: 124px; }
-  .opp-hand { height: 95px; }
-  .opp-hand .card.small { width: 60px; height: 84px; }
+/* ===== Адаптив для маленьких экранов ===== */
+@media (max-height:660px) {
+  :root { --card-w:95px; --card-h:133px; }
+  .g-log-strip { height:44px; }
+  .g-discard-row { height:52px; }
+  .g-player-bar { padding:2px 0; }
+  .g-name { font-size:15px; }
+  .g-avatar { width:30px; height:30px; }
+  .heart { font-size:13px; }
+  .play-arrow { height:28px; }
 }
