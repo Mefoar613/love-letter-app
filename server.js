@@ -1,5 +1,6 @@
 // =====================================================================
-// Love Letter Mini App — Backend
+// Тёмная Дуэль — Backend v3
+// Правила: Love Letter 2nd Edition (21 карта, 2 игрока = 6 жетонов)
 // =====================================================================
 const express = require('express');
 const http    = require('http');
@@ -8,55 +9,55 @@ const { Server } = require('socket.io');
 
 const app    = express();
 const server = http.createServer(app);
-const io     = new Server(server, {
-  cors: { origin: '*', methods: ['GET','POST'] },
-});
+const io     = new Server(server, { cors:{ origin:'*', methods:['GET','POST'] } });
 
-// MIME-типы явно — иначе Render отдаёт CSS как text/plain
+// Явные MIME-типы (важно для Render)
 app.use(express.static(path.join(__dirname, 'public'), {
-  setHeaders: (res, filePath) => {
-    const ext = path.extname(filePath).toLowerCase();
-    const mime = {
-      '.css':'.css','.js':'.js','.html':'.html',
-    };
-    const types = {
+  setHeaders(res, fp) {
+    const t = {
       '.css':'text/css; charset=utf-8',
       '.js':'application/javascript; charset=utf-8',
       '.html':'text/html; charset=utf-8',
       '.json':'application/json',
-      '.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg',
-      '.gif':'image/gif','.webp':'image/webp','.svg':'image/svg+xml',
-      '.ico':'image/x-icon',
-      '.mp3':'audio/mpeg','.ogg':'audio/ogg','.wav':'audio/wav',
-      '.woff':'font/woff','.woff2':'font/woff2','.ttf':'font/ttf',
+      '.png':'image/png', '.jpg':'image/jpeg', '.jpeg':'image/jpeg',
+      '.gif':'image/gif', '.webp':'image/webp', '.svg':'image/svg+xml',
+      '.ico':'image/x-icon', '.mp3':'audio/mpeg', '.ogg':'audio/ogg',
+      '.wav':'audio/wav', '.woff':'font/woff', '.woff2':'font/woff2',
     };
-    if (types[ext]) res.setHeader('Content-Type', types[ext]);
-  },
+    const ext = path.extname(fp).toLowerCase();
+    if (t[ext]) res.setHeader('Content-Type', t[ext]);
+  }
 }));
+app.get('/health', (_, res) => res.send('ok'));
 
-app.get('/health', (_,res) => res.send('ok'));
-
-// ===== КОЛОДА =====
+// ===================================================================
+// НУАРНАЯ КОЛОДА (21 карта)
+// ===================================================================
 const CARD_DEFS = {
-  1: { name:'Обстоятельства', count:5, variants:5, ability:'Назови карту (не «Обстоятельства»). Если у соперника она — он выбывает.' },
-  2: { name:'Свидетель',      count:2, variants:2, ability:'Посмотри карту в руке соперника.' },
-  3: { name:'Дуэлянт',        count:2, variants:2, ability:'Сравните карты. У кого ниже — выбывает.' },
-  4: { name:'Защитник',       count:2, variants:2, ability:'До следующего своего хода ты неуязвим.' },
-  5: { name:'Палач',          count:2, variants:2, ability:'Выбери игрока — он сбрасывает карту и берёт новую.' },
-  6: { name:'Заговорщик',     count:1, variants:1, ability:'Обменяйся картами с соперником.' },
-  7: { name:'Вдова',          count:1, variants:1, ability:'Если на руке также 5 или 6 — обязана быть сброшена. Эффекта нет.' },
-  8: { name:'Императрица',    count:1, variants:1, ability:'Если сброшена по любой причине — ты выбываешь.' },
+  0: { name:'Информатор',     count:2, ability:'При розыгрыше: ничего. Бонус: если в конце раунда ты единственный выживший с сыгранным Информатором — +1 жетон.' },
+  1: { name:'Детектив',       count:6, ability:'Назови карту (не Детектив). Если у соперника она — он выбывает.' },
+  2: { name:'Журналист',      count:2, ability:'Тайно посмотри карту в руке соперника.' },
+  3: { name:'Громила',        count:2, ability:'Тайно сравни карты. У кого номинал меньше — выбывает. Ничья — все остаются.' },
+  4: { name:'Продажный коп',  count:2, ability:'До своего следующего хода ты неуязвим для чужих эффектов.' },
+  5: { name:'Федерал',        count:2, ability:'Выбери игрока (можно себя). Он сбрасывает карту и берёт новую. Если сброшен Компромат — он выбывает.' },
+  6: { name:'Теневой брокер', count:2, ability:'Возьми 2 карты из колоды. Оставь 1, две другие верни вниз колоды в любом порядке.' },
+  7: { name:'Босс мафии',     count:1, ability:'Поменяйся картами с другим игроком.' },
+  8: { name:'Роковая женщина',count:1, ability:'Ничего не делает. Но: если на руке есть Федерал (5) или Босс мафии (7) — ОБЯЗАН сыграть Роковую женщину.' },
+  9: { name:'Компромат',      count:1, ability:'Если сброшен по любой причине — ты немедленно выбываешь.' },
 };
+// Итого: 2+6+2+2+2+2+2+1+1+1 = 21 карта ✓
 
+const WIN_TOKENS = 6; // для 2 игроков
+
+// ===================================================================
+// СТРОИМ КОЛОДУ
+// ===================================================================
 function buildDeck() {
   const deck = [];
   for (const [vs, def] of Object.entries(CARD_DEFS)) {
     const value = parseInt(vs, 10);
-    const pool = Array.from({length: def.variants}, (_,i) => i+1);
-    shuffle(pool);
     for (let i = 0; i < def.count; i++) {
-      const art = pool[i % pool.length];
-      deck.push({ value, art, id: `${value}_${art}_${Math.random().toString(36).slice(2,7)}` });
+      deck.push({ value, id:`${value}_${i}_${Math.random().toString(36).slice(2,6)}` });
     }
   }
   shuffle(deck);
@@ -64,19 +65,26 @@ function buildDeck() {
 }
 
 function shuffle(arr) {
-  for (let i = arr.length-1; i > 0; i--) {
+  for (let i = arr.length-1; i>0; i--) {
     const j = Math.floor(Math.random()*(i+1));
     [arr[i],arr[j]] = [arr[j],arr[i]];
   }
 }
 
-function deckByValue(deck) {
-  const counts = {};
-  for (const c of deck) counts[c.value] = (counts[c.value]||0)+1;
-  return counts;
+// ===================================================================
+// УЧЁТ ПРОСМОТРЕННЫХ КАРТ (приватно для каждого игрока)
+// ===================================================================
+function addSeen(room, userId, value) {
+  if (!room.seenCounts[userId]) room.seenCounts[userId] = {};
+  room.seenCounts[userId][value] = (room.seenCounts[userId][value] || 0) + 1;
+}
+function addSeenBoth(room, value) {
+  for (const p of room.players) addSeen(room, p.userId, value);
 }
 
-// ===== КОМНАТЫ =====
+// ===================================================================
+// КОМНАТЫ
+// ===================================================================
 const rooms = new Map();
 
 class Room {
@@ -84,7 +92,8 @@ class Room {
     this.id = id;
     this.players = [];
     this.state = null;
-    this.hearts = {};          // userId → int (7 макс)
+    this.tokens = {};          // userId → int
+    this.seenCounts = {};      // userId → { value: count }
     this.roundTimeout = null;
     this.rematchVotes = new Set();
   }
@@ -98,18 +107,24 @@ class Room {
   removeBySocket(sid) {
     this.players = this.players.filter(p => p.socketId !== sid);
   }
+
   publicState(forSocketId) {
     const s = this.state;
     if (!s) return null;
     const me  = s.players.find(p => p.socketId === forSocketId);
     const opp = s.players.find(p => p.socketId !== forSocketId);
+    const myId = me?.userId;
+    const cur  = s.players[s.turn];
+
     return {
-      turn:      s.turn,
-      deckCount: s.deck.length,
-      deckByValue: deckByValue(s.deck),
-      log:       s.log.slice(-20),
-      roundOver: s.roundOver || null,
-      gameOver:  s.gameOver  || null,
+      isMyTurn:    cur?.socketId === forSocketId && !s.pendingChancellor && !s.roundOver && !s.gameOver,
+      turnName:    cur?.name,
+      log:         s.log.slice(-30),
+      roundOver:   s.roundOver  || null,
+      gameOver:    s.gameOver   || null,
+      deckCount:   s.deck.length,
+      excludedCards: s.excludedCards, // 3 открытые исключённые карты
+      pendingChancellor: s.pendingChancellor?.socketId === forSocketId ? s.pendingChancellor.options : null,
       me: me && {
         name:      me.name,
         avatar:    me.avatar,
@@ -117,7 +132,8 @@ class Room {
         discard:   me.discard,
         protected: me.protected,
         eliminated:me.eliminated,
-        hearts:    this.hearts[me.userId] ?? 7,
+        tokens:    this.tokens[me.userId] || 0,
+        seenCounts:this.seenCounts[myId]  || {},
       },
       opponent: opp && {
         name:      opp.name,
@@ -126,222 +142,319 @@ class Room {
         discard:   opp.discard,
         protected: opp.protected,
         eliminated:opp.eliminated,
-        hearts:    this.hearts[opp.userId] ?? 7,
+        tokens:    this.tokens[opp.userId] || 0,
       },
     };
   }
 }
 
-// ===== ИГРОВАЯ ЛОГИКА =====
-
-function startRound(room, resetHearts = false) {
+// ===================================================================
+// ИГРОВАЯ ЛОГИКА — НАЧАЛО РАУНДА
+// ===================================================================
+function startRound(room, resetTokens = false) {
   if (room.roundTimeout) { clearTimeout(room.roundTimeout); room.roundTimeout = null; }
 
+  if (resetTokens || Object.keys(room.tokens).length === 0) {
+    for (const p of room.players) room.tokens[p.userId] = 0;
+  }
+  // Обнуляем seenCounts для нового раунда
+  room.seenCounts = {};
+  for (const p of room.players) room.seenCounts[p.userId] = {};
+
   const deck = buildDeck();
+
+  // 1 карта лицом вниз (сожжённая)
   const burned = deck.shift();
 
-  // Инициализируем или сбрасываем сердца
-  if (resetHearts || Object.keys(room.hearts).length === 0) {
-    for (const p of room.players) room.hearts[p.userId] = 7;
+  // 3 карты лицом вверх (для 2 игроков) — оба видят
+  const excludedCards = [];
+  for (let i = 0; i < 3 && deck.length > 0; i++) {
+    const c = deck.shift();
+    excludedCards.push(c);
+    addSeenBoth(room, c.value);
   }
 
-  const players = room.players.map(p => ({
-    socketId: p.socketId,
-    userId:   p.userId,
-    name:     p.name,
-    avatar:   p.avatar || null,
-    hand:     [deck.shift()],
-    discard:  [],
-    protected:   false,
-    eliminated:  false,
+  const players = room.players.map((p, idx) => ({
+    socketId:  p.socketId,
+    userId:    p.userId,
+    name:      p.name,
+    avatar:    p.avatar || null,
+    hand:      [],
+    discard:   [],
+    protected: false,
+    eliminated:false,
     mustPlayCountess: false,
   }));
 
-  // Первый игрок сразу берёт карту
-  players[0].hand.push(deck.shift());
+  // Раздаём по 1 карте, первый берёт ещё одну
+  for (const pl of players) {
+    const c = deck.shift();
+    pl.hand.push(c);
+    addSeen(room, pl.userId, c.value);
+  }
+  const c2 = deck.shift();
+  players[0].hand.push(c2);
+  addSeen(room, players[0].userId, c2.value);
+  updateCountess(players[0]);
 
   room.state = {
-    deck, burned, players,
+    deck, burned, excludedCards, players,
     turn: 0,
-    log: [`Новый раунд! Ходит ${players[0].name}.`],
+    log:  [],
     roundOver: null,
     gameOver:  null,
+    pendingChancellor: null,
   };
   room.rematchVotes.clear();
 }
 
-function emitState(room) {
-  for (const p of room.players) {
-    const sid = p.socketId;
-    if (sid) io.to(sid).emit('state', room.publicState(sid));
-  }
+function updateCountess(player) {
+  const vals = player.hand.map(c => c.value);
+  player.mustPlayCountess = vals.includes(8) && (vals.includes(5) || vals.includes(7));
 }
 
-function logMsg(room, msg) { room.state.log.push(msg); }
+// ===================================================================
+// КОНЕЦ РАУНДА
+// ===================================================================
+function checkSpyBonus(room) {
+  const s = room.state;
+  const survivors = s.players.filter(p => !p.eliminated);
+  const withSpy = survivors.filter(p => p.discard.some(c => c.value === 0));
+  return withSpy.length === 1 ? withSpy[0].userId : null;
+}
 
 function endRound(room, winnerUserId) {
   const s = room.state;
-  const winnerPlayer = s.players.find(p => p.userId === winnerUserId);
-  const loserPlayer  = s.players.find(p => p.userId !== winnerUserId);
+  if (room.roundTimeout) return; // уже завершён
 
-  if (!loserPlayer || !winnerPlayer) return;
+  const winner = s.players.find(p => p.userId === winnerUserId);
+  const loser  = s.players.find(p => p.userId !== winnerUserId);
 
-  // Вычитаем сердце у проигравшего
-  room.hearts[loserPlayer.userId] = (room.hearts[loserPlayer.userId] ?? 7) - 1;
+  // Показываем руки всех выживших (если конец по колоде)
+  const revealedHands = {};
+  for (const pl of s.players.filter(p => !p.eliminated)) {
+    revealedHands[pl.userId] = pl.hand;
+  }
 
-  const loserHearts = room.hearts[loserPlayer.userId];
+  // +1 жетон победителю раунда
+  room.tokens[winnerUserId] = (room.tokens[winnerUserId] || 0) + 1;
 
-  if (loserHearts <= 0) {
-    // Игра окончена
+  // Бонус Информатора (шпиона)
+  const spyBonus = checkSpyBonus(room);
+  if (spyBonus) {
+    room.tokens[spyBonus] = (room.tokens[spyBonus] || 0) + 1;
+    const bonusName = room.players.find(p => p.userId === spyBonus)?.name;
+    logMsg(room, `🃏 Бонус Информатора → +1 жетон ${bonusName}`);
+  }
+
+  const winnerTokens = room.tokens[winnerUserId];
+  const loserTokens  = room.tokens[loser?.userId] || 0;
+
+  // Проверка победы в игре
+  if (winnerTokens >= WIN_TOKENS) {
     s.gameOver = {
-      winnerId:   winnerPlayer.userId,
-      winnerName: winnerPlayer.name,
-      loserName:  loserPlayer.name,
+      winnerId:    winnerUserId,
+      winnerName:  winner?.name,
+      loserName:   loser?.name,
+      winnerTokens,
+      loserTokens,
     };
-    s.roundOver = null;
   } else {
-    // Просто раунд окончен
     s.roundOver = {
-      winnerId:   winnerPlayer.userId,
-      winnerName: winnerPlayer.name,
-      loserName:  loserPlayer.name,
-      loserHearts,
+      winnerId:    winnerUserId,
+      winnerName:  winner?.name,
+      loserName:   loser?.name,
+      winnerTokens,
+      loserTokens,
+      revealedHands,
+      spyBonus,
     };
-    // Через 3 сек автозапуск нового раунда
+    // Автостарт нового раунда через 4 сек
     room.roundTimeout = setTimeout(() => {
       startRound(room, false);
       io.to(room.id).emit('new_round');
       emitState(room);
-    }, 3500);
+    }, 4000);
   }
 }
 
 function nextTurn(room) {
   const s = room.state;
-  if (s.roundOver || s.gameOver) return;
+  if (s.roundOver || s.gameOver || s.pendingChancellor) return;
 
   const alive = s.players.filter(p => !p.eliminated);
 
-  if (alive.length === 1) {
-    logMsg(room, `🏆 ${alive[0].name} побеждает раунд: соперник выбыл.`);
-    endRound(room, alive[0].userId);
+  if (alive.length <= 1) {
+    const winner = alive[0];
+    if (winner) {
+      logMsg(room, `🏆 ${winner.name} побеждает раунд — остался один.`);
+      endRound(room, winner.userId);
+    }
     return;
   }
+
   if (s.deck.length === 0) {
-    const ranked = [...alive].sort((a,b) => b.hand[0].value - a.hand[0].value);
-    if (ranked.length>=2 && ranked[0].hand[0].value === ranked[1].hand[0].value) {
-      const sum = p => p.discard.reduce((a,c)=>a+c.value,0);
-      ranked.sort((a,b)=>sum(b)-sum(a));
+    // Конец по колоде — сравниваем карты
+    const ranked = [...alive].sort((a,b) => b.hand[0]?.value - a.hand[0]?.value);
+    // Ничья по номиналу → по сумме сбросов
+    if (ranked.length >= 2 && ranked[0].hand[0]?.value === ranked[1].hand[0]?.value) {
+      const sum = p => p.discard.reduce((a,c) => a + c.value, 0);
+      ranked.sort((a,b) => sum(b)-sum(a));
     }
-    logMsg(room, `🏆 Колода исчерпана. Побеждает раунд ${ranked[0].name}.`);
+    logMsg(room, `🃏 Колода исчерпана. Показываем карты.`);
     endRound(room, ranked[0].userId);
     return;
   }
 
+  // Передаём ход
   let next = (s.turn+1) % s.players.length;
   while (s.players[next].eliminated) next = (next+1) % s.players.length;
   s.turn = next;
 
   const cur = s.players[next];
-  cur.protected = false;
-  cur.hand.push(s.deck.shift());
+  cur.protected = false;  // защита снимается в начале своего хода
 
-  const has7    = cur.hand.find(c=>c.value===7);
-  const has5or6 = cur.hand.find(c=>c.value===5||c.value===6);
-  cur.mustPlayCountess = !!(has7 && has5or6);
-
-  logMsg(room, `Ходит ${cur.name}.`);
+  // Взять карту
+  const drawn = s.deck.shift();
+  cur.hand.push(drawn);
+  addSeen(room, cur.userId, drawn.value);
+  updateCountess(cur);
 }
 
+// ===================================================================
+// ПРИМЕНЕНИЕ КАРТЫ
+// ===================================================================
 function playCard(room, socketId, payload) {
   const s = room.state;
-  if (!s || s.roundOver || s.gameOver) return { error: 'Игра не активна.' };
+  if (!s || s.roundOver || s.gameOver) return { error:'Игра не активна.' };
+  if (s.pendingChancellor) return { error:'Сначала выбери карту для руки (Теневой брокер).' };
 
   const me = s.players[s.turn];
-  if (me.socketId !== socketId) return { error: 'Сейчас не твой ход.' };
+  if (me.socketId !== socketId) return { error:'Сейчас не твой ход.' };
 
   const { cardId, target, guess } = payload;
   const idx = me.hand.findIndex(c => c.id === cardId);
-  if (idx < 0) return { error: 'Карты нет в руке.' };
+  if (idx < 0) return { error:'Карты нет в руке.' };
   const card = me.hand[idx];
 
-  if (me.mustPlayCountess && card.value !== 7)
-    return { error: 'У тебя Вдова — обязан сбросить её.' };
+  if (me.mustPlayCountess && card.value !== 8)
+    return { error:'На руке Роковая женщина (8) — обязан сыграть её.' };
 
+  // Снимаем с руки, кладём в сброс (оба видят)
   me.hand.splice(idx, 1);
   me.discard.push(card);
-  logMsg(room, `${me.name} играет «${CARD_DEFS[card.value].name}».`);
+  addSeenBoth(room, card.value);
+  logMsg(room, `${me.name} играет «${CARD_DEFS[card.value].name}» [${card.value}].`);
 
   const opp = s.players.find(p => p.socketId !== socketId && !p.eliminated);
 
   switch (card.value) {
-    case 1: {
-      if (!opp || opp.protected) { logMsg(room, opp ? `${opp.name} защищён.` : 'Нет цели.'); break; }
-      if (!guess || guess<2 || guess>8) return rollback(room, me, card, 'Назови карту от 2 до 8.');
+    case 0: { // Информатор — ничего (бонус в конце раунда)
+      logMsg(room, `Информатор сыгран. Бонус считается в конце раунда.`);
+      break;
+    }
+    case 1: { // Детектив — угадай карту
+      if (!opp || opp.protected) { logMsg(room, opp ? `${opp.name} под защитой.`:'Нет цели.'); break; }
+      if (guess === undefined || guess < 0 || guess > 9 || guess === 1)
+        return rollback(room, me, card, 'Назови карту от 0 до 9 (не Детектив).');
       if (opp.hand[0]?.value === guess) {
-        opp.eliminated = true;
+        addSeenBoth(room, opp.hand[0].value);
         opp.discard.push(...opp.hand.splice(0));
-        logMsg(room, `🎯 Угадано! ${opp.name} выбывает.`);
+        opp.eliminated = true;
+        logMsg(room, `🎯 Угадано! У ${opp.name} был ${CARD_DEFS[guess].name}. Выбывает.`);
       } else {
-        logMsg(room, `Промах. У соперника не ${CARD_DEFS[guess].name}.`);
+        logMsg(room, `Промах — у ${opp.name} нет ${CARD_DEFS[guess].name}.`);
       }
       break;
     }
-    case 2: {
-      if (!opp || opp.protected) { logMsg(room, opp ? `${opp.name} защищён.` : 'Нет цели.'); break; }
+    case 2: { // Журналист — посмотри карту
+      if (!opp || opp.protected) { logMsg(room, opp ? `${opp.name} под защитой.`:'Нет цели.'); break; }
+      addSeen(room, me.userId, opp.hand[0]?.value);
       io.to(me.socketId).emit('peek', {
         playerName: opp.name,
         card: opp.hand[0],
         cardName: CARD_DEFS[opp.hand[0]?.value]?.name,
       });
-      logMsg(room, `${me.name} смотрит карту соперника.`);
+      logMsg(room, `${me.name} тайно смотрит карту ${opp.name}.`);
       break;
     }
-    case 3: {
-      if (!opp || opp.protected) { logMsg(room, opp ? `${opp.name} защищён.` : 'Нет цели.'); break; }
+    case 3: { // Громила — сравни карты
+      if (!opp || opp.protected) { logMsg(room, opp ? `${opp.name} под защитой.`:'Нет цели.'); break; }
       const mv = me.hand[0]?.value, ov = opp.hand[0]?.value;
+      if (mv === undefined || ov === undefined) break;
       if (mv > ov) {
-        opp.eliminated = true; opp.discard.push(...opp.hand.splice(0));
-        logMsg(room, `${me.name} (${mv}) > ${opp.name} (${ov}). Соперник выбывает.`);
+        addSeenBoth(room, ov);
+        opp.discard.push(...opp.hand.splice(0)); opp.eliminated = true;
+        logMsg(room, `Разборка: ${me.name}(${mv}) > ${opp.name}(${ov}). ${opp.name} выбывает.`);
       } else if (mv < ov) {
-        me.eliminated = true; me.discard.push(...me.hand.splice(0));
-        logMsg(room, `${me.name} (${mv}) < ${opp.name} (${ov}). ${me.name} выбывает.`);
+        addSeenBoth(room, mv);
+        me.discard.push(...me.hand.splice(0)); me.eliminated = true;
+        logMsg(room, `Разборка: ${me.name}(${mv}) < ${opp.name}(${ov}). ${me.name} выбывает.`);
       } else {
-        logMsg(room, `Ничья (${mv}=${ov}).`);
+        logMsg(room, `Разборка: ничья (${mv}=${ov}). Все остаются.`);
       }
       break;
     }
-    case 4: {
+    case 4: { // Продажный коп — защита
       me.protected = true;
-      logMsg(room, `${me.name} под защитой.`);
+      logMsg(room, `${me.name} под защитой Продажного копа до следующего хода.`);
       break;
     }
-    case 5: {
+    case 5: { // Федерал — сброс + новая карта
       const tgt = target === 'self' ? me : opp;
       if (!tgt) break;
-      if (tgt.protected && tgt !== me) { logMsg(room,`${tgt.name} защищён.`); break; }
+      if (tgt.protected && tgt !== me) { logMsg(room, `${tgt.name} под защитой.`); break; }
       const dropped = tgt.hand.shift();
       tgt.discard.push(dropped);
-      if (dropped?.value === 8) {
+      addSeenBoth(room, dropped?.value);
+      if (dropped?.value === 9) {
+        // Компромат при сбросе — выбывает
         tgt.eliminated = true;
-        logMsg(room, `${tgt.name} сбрасывает Императрицу и выбывает!`);
+        logMsg(room, `💀 ${tgt.name} сбросил Компромат — выбывает!`);
       } else {
-        if (s.deck.length>0) tgt.hand.push(s.deck.shift());
-        else if (s.burned) { tgt.hand.push(s.burned); s.burned=null; }
-        logMsg(room, `${tgt.name} сбрасывает карту и берёт новую.`);
+        // Берёт новую карту (из колоды или из «сожжённой»)
+        if (s.deck.length > 0) {
+          const newCard = s.deck.shift();
+          tgt.hand.push(newCard);
+          addSeen(room, tgt.userId, newCard.value);
+        } else if (s.burned) {
+          tgt.hand.push(s.burned); s.burned = null;
+        }
+        logMsg(room, `Облава! ${tgt.name} сбрасывает карту и берёт новую.`);
       }
+      updateCountess(tgt);
       break;
     }
-    case 6: {
-      if (!opp || opp.protected) { logMsg(room, opp?`${opp.name} защищён.`:'Нет цели.'); break; }
+    case 6: { // Теневой брокер — берёт 2, кладёт 2 вниз
+      const extra = [];
+      if (s.deck.length > 0) extra.push(s.deck.shift());
+      if (s.deck.length > 0) extra.push(s.deck.shift());
+      // Все 3 карты (1 в руке + 2 взятых) игрок видит
+      const options = [...me.hand, ...extra];
+      for (const c of options) addSeen(room, me.userId, c.value);
+      s.pendingChancellor = { socketId, options };
+      logMsg(room, `${me.name} изучает варианты Теневого брокера…`);
+      io.to(socketId).emit('chancellor_choice', { cards: options });
+      emitState(room); // отправляем состояние (без nextTurn)
+      return { ok: true };
+    }
+    case 7: { // Босс мафии — обмен картами
+      if (!opp || opp.protected) { logMsg(room, opp ? `${opp.name} под защитой.`:'Нет цели.'); break; }
+      // Оба видят карты друг друга при обмене
+      if (me.hand[0]) addSeen(room, opp.userId, me.hand[0].value);
+      if (opp.hand[0]) addSeen(room, me.userId, opp.hand[0].value);
       [me.hand, opp.hand] = [opp.hand, me.hand];
-      logMsg(room, `${me.name} и ${opp.name} обменялись картами.`);
+      updateCountess(me); updateCountess(opp);
+      logMsg(room, `Дон приказал — ${me.name} и ${opp.name} меняются картами.`);
       break;
     }
-    case 7: { logMsg(room, `${me.name} сбрасывает Вдову.`); break; }
-    case 8: {
+    case 8: { // Роковая женщина — нет эффекта
+      logMsg(room, `${me.name} избавляется от Роковой женщины.`);
+      break;
+    }
+    case 9: { // Компромат — сброс = выбывание
       me.eliminated = true;
-      logMsg(room, `💔 ${me.name} сбросил Императрицу и проигрывает.`);
+      logMsg(room, `💀 ${me.name} сбросил Компромат — выбывает!`);
       break;
     }
   }
@@ -357,14 +470,30 @@ function rollback(room, me, card, errMsg) {
   return { error: errMsg };
 }
 
-// ===== SOCKET.IO =====
+function logMsg(room, msg) { room.state.log.push(msg); }
+
+// ===================================================================
+// ОТПРАВКА СОСТОЯНИЯ
+// ===================================================================
+function emitState(room) {
+  for (const p of room.players) {
+    if (p.socketId) io.to(p.socketId).emit('state', room.publicState(p.socketId));
+  }
+}
+
+// ===================================================================
+// SOCKET.IO
+// ===================================================================
 io.on('connection', socket => {
   socket.on('join', ({ roomId, user }) => {
     if (!roomId || !user) return;
     let room = rooms.get(roomId);
     if (!room) { room = new Room(roomId); rooms.set(roomId, room); }
 
-    const ok = room.addPlayer({ socketId:socket.id, userId:user.id, name:user.name||'Игрок', avatar:user.avatar||null });
+    const ok = room.addPlayer({
+      socketId: socket.id, userId: user.id,
+      name: user.name || 'Игрок', avatar: user.avatar || null,
+    });
     if (!ok) { socket.emit('error_msg','Комната заполнена.'); return; }
 
     socket.join(roomId);
@@ -373,7 +502,7 @@ io.on('connection', socket => {
 
     io.to(roomId).emit('lobby', {
       roomId,
-      players: room.players.map(p=>({name:p.name, avatar:p.avatar, userId:p.userId})),
+      players: room.players.map(p => ({ name:p.name, avatar:p.avatar, userId:p.userId })),
     });
 
     if (room.players.length === 2 && !room.state) {
@@ -389,7 +518,31 @@ io.on('connection', socket => {
     const room = rooms.get(socket.data.roomId);
     if (!room) return;
     const result = playCard(room, socket.id, payload);
-    if (result.error) socket.emit('error_msg', result.error);
+    if (result?.error) socket.emit('error_msg', result.error);
+    else emitState(room);
+  });
+
+  // Теневой брокер: игрок выбрал какую карту оставить
+  socket.on('chancellor_pick', keepCardId => {
+    const room = rooms.get(socket.data.roomId);
+    if (!room) return;
+    const s = room.state;
+    if (!s?.pendingChancellor || s.pendingChancellor.socketId !== socket.id) return;
+
+    const { options } = s.pendingChancellor;
+    const kept    = options.find(c => c.id === keepCardId);
+    const returns = options.filter(c => c.id !== keepCardId);
+    if (!kept) { socket.emit('error_msg','Неверный выбор.'); return; }
+
+    const me = s.players.find(p => p.socketId === socket.id);
+    me.hand = [kept];
+    updateCountess(me);
+    // Возвращаем 2 карты в низ колоды (перемешиваем порядок)
+    shuffle(returns);
+    s.deck.push(...returns);
+    s.pendingChancellor = null;
+    logMsg(room, `${me.name} выбрал карту, вернул ${returns.length} в колоду.`);
+    nextTurn(room);
     emitState(room);
   });
 
@@ -410,9 +563,7 @@ io.on('connection', socket => {
   socket.on('disconnect', () => {
     setTimeout(() => {
       const room = rooms.get(socket.data.roomId);
-      if (room?.players.find(p=>p.socketId===socket.id)) {
-        cleanup(socket);
-      }
+      if (room?.players.find(p => p.socketId === socket.id)) cleanup(socket);
     }, 30000);
   });
 });
