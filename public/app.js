@@ -1,5 +1,5 @@
 // =====================================================================
-// Тёмная Дуэль — Frontend v3.1
+// Тёмная Дуэль — Frontend v3.2
 // =====================================================================
 const tg = window.Telegram?.WebApp;
 if (tg) { tg.ready(); tg.expand(); tg.setHeaderColor?.('#08050f'); tg.setBackgroundColor?.('#08050f'); }
@@ -40,26 +40,23 @@ function playClick() {
     const now = audioCtx.currentTime;
     const o = audioCtx.createOscillator(), g = audioCtx.createGain();
     o.connect(g); g.connect(audioCtx.destination);
-    o.type = 'triangle';
-    o.frequency.setValueAtTime(800,now);
-    o.frequency.exponentialRampToValueAtTime(380,now+.07);
+    o.type='triangle';
+    o.frequency.setValueAtTime(800,now); o.frequency.exponentialRampToValueAtTime(380,now+.07);
     g.gain.setValueAtTime(.13,now); g.gain.exponentialRampToValueAtTime(.001,now+.09);
     o.start(now); o.stop(now+.1);
-  } catch(e) {}
+  } catch(e){}
 }
-// Звук карты (более низкий, мягкий)
 function playCardSound() {
   try {
     if (!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)();
     const now = audioCtx.currentTime;
     const o = audioCtx.createOscillator(), g = audioCtx.createGain();
     o.connect(g); g.connect(audioCtx.destination);
-    o.type = 'sine';
-    o.frequency.setValueAtTime(320,now);
-    o.frequency.exponentialRampToValueAtTime(180,now+.15);
-    g.gain.setValueAtTime(.18,now); g.gain.exponentialRampToValueAtTime(.001,now+.18);
+    o.type='sine';
+    o.frequency.setValueAtTime(300,now); o.frequency.exponentialRampToValueAtTime(160,now+.16);
+    g.gain.setValueAtTime(.16,now); g.gain.exponentialRampToValueAtTime(.001,now+.19);
     o.start(now); o.stop(now+.2);
-  } catch(e) {}
+  } catch(e){}
 }
 document.body.addEventListener('click', e => {
   if (e.target.closest('.btn,.am-opt,.g-deck-btn,.g-log-strip,.play-arrow,.chancellor-option,#intro')) playClick();
@@ -107,10 +104,10 @@ function connectSocket() {
     document.getElementById('lobby-room-id').textContent = d.roomId;
     renderLobbyPlayers(d.players);
   });
-  socket.on('start', () => { showScreen('game'); closeAllOverlays(); resetState(); });
+  socket.on('start',     () => { showScreen('game'); closeAllOverlays(); resetState(); });
   socket.on('new_round', () => { closeAllOverlays(); stopRoundTimer(); });
-  socket.on('state', s => handleNewState(s));
-  socket.on('peek', d => showPeek(d));
+  socket.on('state',     s  => handleNewState(s));
+  socket.on('peek',      d  => showPeek(d));
   socket.on('chancellor_choice', d => showChancellor(d.cards));
   socket.on('rematch_pending', ({count}) => { document.getElementById('go-pending').textContent = count===1?'Ждём соперника…':''; });
   socket.on('opponent_left', () => { showToast('Соперник покинул игру'); setTimeout(leaveToMenu, 1800); });
@@ -129,9 +126,9 @@ function enterGame(roomId, isInvite) {
   if (isInvite) setTimeout(() => shareInvite(roomId), 300);
 }
 function shareInvite(roomId) {
-  const BOT = 'YourBotName'; const APP = 'play';
-  const link = `https://t.me/${BOT}/${APP}?startapp=${roomId}`;
-  if (tg?.openTelegramLink) tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(`Дуэль! Комната ${roomId}`)}`);
+  const BOT='YourBotName', APP='play';
+  const link=`https://t.me/${BOT}/${APP}?startapp=${roomId}`;
+  if (tg?.openTelegramLink) tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent('Дуэль! Комната '+roomId)}`);
   else { navigator.clipboard?.writeText(link); showToast('Ссылка скопирована'); }
 }
 document.getElementById('lobby-share').addEventListener('click', () => { if(currentRoomId) shareInvite(currentRoomId); });
@@ -146,106 +143,110 @@ function renderLobbyPlayers(players) {
   }
 }
 
-// ─── ИГРОВОЕ СОСТОЯНИЕ ───
+// ─── СОСТОЯНИЕ ───
 let lastState = null;
 let pendingCard = null;
 let roundTimerInterval = null;
-// Для отслеживания анимаций
-let prevOppDiscardLen  = 0;
-let prevOppHandCount   = 0;
-let wasMyTurn = false;
+let prevOppDiscardLen = 0;
+let prevOppHandCount  = 0;
 
 function resetState() {
-  lastState=null; pendingCard=null;
-  prevOppDiscardLen=0; prevOppHandCount=0; wasMyTurn=false;
+  lastState = null; pendingCard = null;
+  prevOppDiscardLen = 0; prevOppHandCount = 0;
   stopRoundTimer();
 }
 
-// ════════════════════════════════════════════════════════════════
-// ОБРАБОТКА НОВОГО СОСТОЯНИЯ — определяем что изменилось и анимируем
-// ════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════
+// ОБРАБОТКА НОВОГО СОСТОЯНИЯ
+// Ключевой принцип: если соперник сыграл карту — сначала анимируем
+// улёт, потом рендерим новое состояние. Зону ЯВНО очищаем перед
+// рендером — иначе старый элемент с animations:forwards мешает.
+// ═══════════════════════════════════════════════════════════════════
 function handleNewState(s) {
   const isFirst = !lastState;
 
-  // Определяем события между состояниями
-  const oppDiscardGrew = !isFirst &&
-    s.opponent && lastState.opponent &&
-    s.opponent.discard.length > lastState.opponent.discard.length;
+  // Соперник сыграл карту: его сброс вырос
+  const oppPlayed = !isFirst
+    && s.opponent
+    && lastState.opponent
+    && (s.opponent.discard.length > prevOppDiscardLen);
 
-  const oppDrewCard = !isFirst &&
-    s.opponent && lastState.opponent &&
-    s.opponent.handCount > lastState.opponent.handCount &&
-    !s.isMyTurn;  // соперник только что взял карту (его ход начался)
-
-  // Если соперник сыграл карту — сначала анимируем, потом рендерим
-  if (oppDiscardGrew && !isFirst) {
-    // Анимация: карта улетает в сброс
+  if (oppPlayed) {
+    // Шаг 1: запускаем анимацию улёта текущей карты соперника
     animateOppPlay(() => {
+      // Шаг 2: явно очищаем зону (удаляем элемент с закончившейся анимацией)
+      document.getElementById('opp-card-zone').innerHTML = '';
+      // Шаг 3: сохраняем новое состояние и рендерим
       lastState = s;
-      renderState(s, false);
+      prevOppDiscardLen = s.opponent?.discard?.length || 0;
+      prevOppHandCount  = s.opponent?.handCount || 0;
+      renderState(s, false, true /* oppJustPlayed */);
     });
-    // Лог обновляем сразу
+    // Обновляем лог немедленно, не дожидаясь анимации
     updateLogStrip(s.log);
+    playCardSound();
   } else {
+    // Обычный рендер без анимации улёта
+    const oppDrewCard = !isFirst
+      && s.opponent
+      && lastState.opponent
+      && s.opponent.handCount > prevOppHandCount;
+
     lastState = s;
-    renderState(s, isFirst);
+    prevOppDiscardLen = s.opponent?.discard?.length || 0;
+    prevOppHandCount  = s.opponent?.handCount || 0;
+    renderState(s, isFirst, false);
+
+    if (oppDrewCard) playCardSound();
   }
-
-  // Звук при любом изменении карт
-  if (oppDiscardGrew || oppDrewCard) playCardSound();
-
-  wasMyTurn = !!s.isMyTurn;
 }
 
-// Анимация: карта соперника улетает (перед рендером нового состояния)
+// Запускает анимацию улёта карты соперника, затем вызывает callback
 function animateOppPlay(callback) {
   const zone = document.getElementById('opp-card-zone');
   const existing = zone.querySelector('.card');
-  if (existing) {
+  if (existing && !existing.classList.contains('opp-playing')) {
     existing.classList.add('opp-playing');
-    existing.style.pointerEvents = 'none';
-    setTimeout(() => {
-      callback();
-    }, 680); // время анимации
+    // Ждём окончания CSS-анимации (0.65s) и ещё немного для надёжности
+    setTimeout(callback, 700);
   } else {
+    // Карты нет или анимация уже идёт — рендерим сразу
     callback();
   }
 }
 
-// ════════════════════════════════════════
-// РЕНДЕР СОСТОЯНИЯ
-// ════════════════════════════════════════
-function renderState(s, isFirst) {
-  // Имена/статусы
+// ═══════════════════════════════════════
+// РЕНДЕР
+// ═══════════════════════════════════════
+function renderState(s, isFirst, oppJustPlayed) {
+  // Имена / статусы
   document.getElementById('me-name').textContent  = s.me?.name  || 'Вы';
   document.getElementById('opp-name').textContent = s.opponent?.name || 'Соперник';
-  document.getElementById('me-status').textContent  = s.isMyTurn ? 'твой ход'  : (s.me?.protected  ? 'под защитой' : '');
-  document.getElementById('opp-status').textContent = !s.isMyTurn ? 'ходит' : (s.opponent?.protected ? 'под защитой' : '');
+  document.getElementById('me-status').textContent  = s.isMyTurn   ? 'твой ход'     : (s.me?.protected       ? 'под защитой' : '');
+  document.getElementById('opp-status').textContent = !s.isMyTurn  ? 'ходит'        : (s.opponent?.protected ? 'под защитой' : '');
 
   // Аватары
   const setAv = (id,url) => { if(url) document.getElementById(id).style.backgroundImage=`url('${url}')`; };
-  setAv('me-avatar', s.me?.avatar);
+  setAv('me-avatar',  s.me?.avatar);
   setAv('opp-avatar', s.opponent?.avatar);
 
   // Жетоны
   renderTokens('me-tokens',  s.me?.tokens  || 0);
   renderTokens('opp-tokens', s.opponent?.tokens || 0);
 
-  // Карты
-  const oppHandCountChanged = !isFirst && s.opponent?.handCount !== prevOppHandCount;
-  renderOppCard(s, isFirst, oppHandCountChanged);
-  renderMyCards(s, isFirst);
+  // Карта соперника
+  // Если только что анимировали улёт — зона уже очищена, рендерим новую карту
+  renderOppCard(s, isFirst, oppJustPlayed);
 
-  // Обновляем счётчики
-  prevOppDiscardLen = s.opponent?.discard?.length || 0;
-  prevOppHandCount  = s.opponent?.handCount || 0;
+  // Мои карты
+  renderMyCards(s, isFirst);
 
   // Исключённые
   renderExcluded(s.excludedCards || []);
 
-  // Сбросы
+  // Сбросы (animate last — только если это первый рендер после улёта)
   renderDiscard('me-discard',  s.me?.discard  || [], false);
-  renderDiscard('opp-discard', s.opponent?.discard || [], !isFirst && s.opponent?.discard?.length > prevOppDiscardLen);
+  renderDiscard('opp-discard', s.opponent?.discard || [], oppJustPlayed);
 
   // Счётчик колоды
   document.getElementById('deck-count-badge').textContent = s.deckCount;
@@ -254,65 +255,37 @@ function renderState(s, isFirst) {
   updateLogStrip(s.log);
 
   // Результаты
-  if (s.gameOver)      { stopRoundTimer(); showGameOver(s.gameOver); }
-  else if (s.roundOver)  showRoundOver(s.roundOver);
+  if (s.gameOver)        { stopRoundTimer(); showGameOver(s.gameOver); }
+  else if (s.roundOver)  { showRoundOver(s.roundOver); }
   else {
     document.getElementById('round-over').classList.remove('show');
     document.getElementById('game-over').classList.remove('show');
   }
 }
 
-// ─── ЛОГ ───
-function updateLogStrip(log) {
-  const relevant = (log||[]).filter(Boolean);
-  document.getElementById('log-line-1').textContent = relevant[relevant.length-1] || '—';
-  document.getElementById('log-line-2').textContent = relevant[relevant.length-2] || '';
-}
-document.getElementById('log-strip').addEventListener('click', () => {
-  if (!lastState) return;
-  const list = document.getElementById('lo-list'); list.innerHTML='';
-  [...(lastState.log||[])].reverse().forEach(line => {
-    const d=document.createElement('div'); d.className='lo-entry'; d.textContent=line; list.appendChild(d);
-  });
-  document.getElementById('log-overlay').classList.add('show');
-});
-document.getElementById('log-overlay').addEventListener('click', () => document.getElementById('log-overlay').classList.remove('show'));
-
-// ─── ЖЕТОНЫ ───
-let prevTokens = {};
-function renderTokens(id, count) {
-  const el = document.getElementById(id); if (!el) return;
-  const prev = prevTokens[id] ?? 0;
-  prevTokens[id] = count;
-  let html = '';
-  for (let i=0;i<6;i++) {
-    const earned = i<count, newlyEarned = earned && i>=prev;
-    html += `<span class="token ${earned?'earned':'empty'}${newlyEarned?' new-earn':''}" title="${earned?'жетон':'пусто'}">◆</span>`;
-  }
-  el.innerHTML = html;
-}
-
 // ─── КАРТА СОПЕРНИКА ───
-function renderOppCard(s, isFirst, handChanged) {
+function renderOppCard(s, isFirst, oppJustPlayed) {
   const zone = document.getElementById('opp-card-zone');
-  // Если анимация opp-playing идёт — не трогаем
-  if (zone.querySelector('.opp-playing')) return;
+  // ВАЖНО: НЕ проверяем .opp-playing — зона уже очищена перед вызовом renderState.
+  // Просто всегда рендерим свежую карту.
   zone.innerHTML = '';
   if (!s.opponent || s.opponent.handCount === 0) return;
 
   const card = makeCard(null, false, 'card--opp');
 
-  // Свечение: ход соперника
+  // Свечение когда ход соперника
   if (!s.isMyTurn) card.classList.add('opp-turn-glow');
 
-  // Анимация появления новой карты (соперник взял карту)
-  if (!isFirst && handChanged) {
-    card.classList.add('opp-dealing');
-    playCardSound();
-  } else if (isFirst) {
+  if (isFirst) {
+    // Первый рендер — карта прилетает сверху (раздача)
     card.classList.add('dealing');
     card.style.animationDelay = '0s';
+  } else if (oppJustPlayed) {
+    // Соперник только что сыграл и взял новую карту — прилетает
+    card.classList.add('opp-dealing');
+    playCardSound();
   }
+
   zone.appendChild(card);
 }
 
@@ -322,27 +295,29 @@ function renderMyCards(s, isFirst) {
   if (!s.me?.hand?.length) return;
   const myTurn = s.isMyTurn;
   const row = document.createElement('div');
-  row.style.cssText = 'display:flex;gap:28px;align-items:center;padding-top:36px;'; // padding-top для стрелки
-  s.me.hand.forEach((c,idx) => {
+  row.style.cssText = 'display:flex;gap:24px;align-items:center;';
+
+  s.me.hand.forEach((c, idx) => {
     const wrap = document.createElement('div'); wrap.className='play-arrow-wrap';
+
     if (myTurn) {
       const arrow = document.createElement('div');
       arrow.className='play-arrow'; arrow.title='Сыграть';
       arrow.addEventListener('click', e => { e.stopPropagation(); onPlay(c); });
       wrap.appendChild(arrow);
     }
+
     const cardEl = makeCard(c, true, 'card--big');
     if (myTurn) cardEl.classList.add('my-turn-glow');
     if (isFirst) { cardEl.classList.add('dealing'); cardEl.style.animationDelay=`${idx*.2+.15}s`; }
 
-    // Бейдж X/N (сколько видел / всего в игре)
+    // Бейдж видено X/N — сверху справа чтобы не обрезалось
     const seen  = (s.me?.seenCounts||{})[c.value] || 0;
     const total = CARDS[c.value]?.total || '?';
     const badge = document.createElement('div'); badge.className='card-seen-badge';
     badge.textContent = `${seen}/${total}`;
     cardEl.appendChild(badge);
 
-    // Тап = зум
     cardEl.addEventListener('click', e => { e.stopPropagation(); openZoom(c, s.me?.seenCounts||{}); });
     wrap.appendChild(cardEl);
     row.appendChild(wrap);
@@ -371,16 +346,29 @@ function makeCard(card, faceUp, sizeClass) {
   return el;
 }
 
+// ─── ЛОГ ───
+function updateLogStrip(log) {
+  const lines = (log||[]).filter(Boolean);
+  document.getElementById('log-line-1').textContent = lines[lines.length-1] || '—';
+  document.getElementById('log-line-2').textContent = lines[lines.length-2] || '';
+}
+document.getElementById('log-strip').addEventListener('click', () => {
+  if (!lastState) return;
+  const list = document.getElementById('lo-list'); list.innerHTML='';
+  [...(lastState.log||[])].reverse().forEach(line => {
+    const d=document.createElement('div'); d.className='lo-entry'; d.textContent=line; list.appendChild(d);
+  });
+  document.getElementById('log-overlay').classList.add('show');
+});
+document.getElementById('log-overlay').addEventListener('click', () => document.getElementById('log-overlay').classList.remove('show'));
+
 // ─── СБРОС ───
 function renderDiscard(id, cards, animateLast) {
   const el = document.getElementById(id); el.innerHTML='';
   const slice = cards.slice(-7);
   slice.forEach((c,i) => {
     const card = makeCard(c, true, 'card--sm');
-    // Анимируем последнюю карту как "прилетевшую из руки"
-    if (animateLast && i === slice.length-1) {
-      card.classList.add('discard-entry');
-    }
+    if (animateLast && i === slice.length-1) card.classList.add('discard-entry');
     card.addEventListener('click', () => openZoom(c, lastState?.me?.seenCounts||{}));
     el.appendChild(card);
   });
@@ -394,6 +382,20 @@ function renderExcluded(cards) {
     card.addEventListener('click', () => openZoom(c, lastState?.me?.seenCounts||{}));
     el.appendChild(card);
   });
+}
+
+// ─── ЖЕТОНЫ ───
+let prevTokens = {};
+function renderTokens(id, count) {
+  const el = document.getElementById(id); if (!el) return;
+  const prev = prevTokens[id] ?? 0;
+  prevTokens[id] = count;
+  let html = '';
+  for (let i=0;i<6;i++) {
+    const earned=i<count, newlyEarned=earned&&i>=prev;
+    html+=`<span class="token ${earned?'earned':'empty'}${newlyEarned?' new-earn':''}" title="${earned?'жетон':'пусто'}">◆</span>`;
+  }
+  el.innerHTML = html;
 }
 
 // ─── СЫГРАТЬ КАРТУ ───
@@ -437,42 +439,41 @@ function openTargetModal(card) {
 document.getElementById('action-cancel').addEventListener('click', () => { pendingCard=null; document.getElementById('action-modal').classList.remove('show'); });
 document.getElementById('target-cancel').addEventListener('click', () => { pendingCard=null; document.getElementById('target-modal').classList.remove('show'); });
 
-// ─── ТЕНЕВОЙ БРОКЕР (6) ───
+// ─── ТЕНЕВОЙ БРОКЕР ───
 function showChancellor(cards) {
   const el = document.getElementById('chancellor-modal');
   const wrap = document.getElementById('chancellor-cards'); wrap.innerHTML='';
   cards.forEach(c => {
     const opt=document.createElement('div'); opt.className='chancellor-option';
-    const cardEl=makeCard(c, true, 'card--big');
+    const cardEl=makeCard(c,true,'card--big');
     const lbl=document.createElement('div'); lbl.className='chancellor-choose-label'; lbl.textContent='Выбрать';
-    opt.addEventListener('click', () => { socket.emit('chancellor_pick', c.id); el.classList.remove('show'); });
-    opt.appendChild(cardEl); opt.appendChild(lbl);
-    wrap.appendChild(opt);
+    opt.addEventListener('click', () => { socket.emit('chancellor_pick',c.id); el.classList.remove('show'); });
+    opt.appendChild(cardEl); opt.appendChild(lbl); wrap.appendChild(opt);
   });
   el.classList.add('show');
 }
 
-// ─── ЗУМ КАРТЫ ───
+// ─── ЗУМ ───
 function openZoom(card, seenCounts) {
   if (!card) return;
-  const def = CARDS[card.value];
-  const wrap = document.getElementById('cz-card-img'); wrap.innerHTML='';
+  const def=CARDS[card.value];
+  const wrap=document.getElementById('cz-card-img'); wrap.innerHTML='';
   const img=document.createElement('img'); img.src=`assets/cards/${card.value}.png`; img.onerror=()=>img.style.display='none'; img.alt='';
   wrap.appendChild(img);
   const cn=document.createElement('div'); cn.className='card-corner tl'; cn.textContent=card.value; wrap.appendChild(cn);
   document.getElementById('cz-name').textContent  = def.name;
   document.getElementById('cz-value').textContent = `Карта ${card.value}`;
   document.getElementById('cz-desc').textContent  = def.desc;
-  const seen = (seenCounts||{})[card.value] || 0;
+  const seen=(seenCounts||{})[card.value]||0;
   document.getElementById('cz-seen').textContent  = `Видено: ${seen} из ${def.total}`;
   document.getElementById('card-zoom').classList.add('show');
 }
 document.getElementById('card-zoom').addEventListener('click', () => document.getElementById('card-zoom').classList.remove('show'));
 
-// ─── КОЛОДА (всё распределение) ───
+// ─── КНОПКА КОЛОДЫ ───
 document.getElementById('deck-btn').addEventListener('click', e => {
   e.stopPropagation();
-  const grid = document.getElementById('do-grid'); grid.innerHTML='';
+  const grid=document.getElementById('do-grid'); grid.innerHTML='';
   for (let v=0;v<=9;v++) {
     const def=CARDS[v], row=document.createElement('div'); row.className='do-row';
     const mini=document.createElement('div'); mini.className='do-mini';
@@ -488,9 +489,9 @@ document.getElementById('deck-overlay').addEventListener('click', () => document
 
 // ─── PEEK ───
 function showPeek(data) {
-  const wrap = document.getElementById('peek-card'); wrap.innerHTML='';
+  const wrap=document.getElementById('peek-card'); wrap.innerHTML='';
   if (data.card) { const card=makeCard(data.card,true,'card--big'); wrap.appendChild(card); }
-  document.getElementById('peek-title').textContent = `У ${data.playerName}: ${data.cardName}`;
+  document.getElementById('peek-title').textContent=`У ${data.playerName}: ${data.cardName}`;
   document.getElementById('peek-overlay').classList.add('show');
   tg?.HapticFeedback?.impactOccurred?.('medium');
 }
@@ -500,58 +501,54 @@ document.getElementById('peek-close').addEventListener('click', () => document.g
 let roundTimerVal = 4;
 function showRoundOver(ro) {
   stopRoundTimer();
-  const overlay = document.getElementById('round-over');
-  const iWon = ro.winnerId === ME.id;
-  document.getElementById('ro-glyph').textContent = iWon ? '✦' : '✗';
-  document.getElementById('ro-glyph').style.color = iWon ? 'var(--gold)' : 'var(--red-b)';
-  document.getElementById('ro-title').textContent = iWon ? 'Раунд ваш!'  : 'Раунд потерян';
-  document.getElementById('ro-sub').textContent = iWon ? `${esc(ro.loserName)} теряет позиции` : 'Вы теряете позиции';
-  document.getElementById('ro-tokens-row').innerHTML =
+  const overlay=document.getElementById('round-over');
+  const iWon=ro.winnerId===ME.id;
+  document.getElementById('ro-glyph').textContent     = iWon?'✦':'✗';
+  document.getElementById('ro-glyph').style.color     = iWon?'var(--gold)':'var(--red-b)';
+  document.getElementById('ro-title').textContent     = iWon?'Раунд ваш!':'Раунд потерян';
+  document.getElementById('ro-sub').textContent       = iWon?`${esc(ro.loserName)} теряет позиции`:'Вы теряете позиции';
+  document.getElementById('ro-tokens-row').innerHTML  =
     `<span>${esc(ro.winnerName)}: <strong>${ro.winnerTokens} ◆</strong></span>
      <span style="margin:0 8px;opacity:.4">|</span>
      <span>${esc(ro.loserName)}: <strong>${ro.loserTokens} ◆</strong></span>`;
   overlay.classList.add('show');
   tg?.HapticFeedback?.notificationOccurred?.(iWon?'success':'error');
   roundTimerVal=4; document.getElementById('ro-timer').textContent=roundTimerVal;
-  roundTimerInterval = setInterval(() => {
-    roundTimerVal--;
-    document.getElementById('ro-timer').textContent=roundTimerVal;
-    if (roundTimerVal<=0) { stopRoundTimer(); overlay.classList.remove('show'); }
-  }, 1000);
+  roundTimerInterval=setInterval(()=>{
+    roundTimerVal--; document.getElementById('ro-timer').textContent=roundTimerVal;
+    if(roundTimerVal<=0){stopRoundTimer();overlay.classList.remove('show');}
+  },1000);
 }
-function stopRoundTimer() { if(roundTimerInterval){clearInterval(roundTimerInterval);roundTimerInterval=null;} }
+function stopRoundTimer(){if(roundTimerInterval){clearInterval(roundTimerInterval);roundTimerInterval=null;}}
 
 // ─── КОНЕЦ ИГРЫ ───
 function showGameOver(go) {
   stopRoundTimer();
-  const overlay = document.getElementById('game-over');
-  const iWon = go.winnerId === ME.id;
-  document.getElementById('go-glyph').textContent = iWon ? '✦' : '✗';
-  document.getElementById('go-title').textContent = iWon ? 'Победа!' : 'Поражение';
-  document.getElementById('go-sub').textContent   = iWon ? `${esc(go.loserName)} разоблачён.` : 'Ваши связи уничтожены.';
+  const iWon=go.winnerId===ME.id;
+  document.getElementById('go-glyph').textContent = iWon?'✦':'✗';
+  document.getElementById('go-title').textContent = iWon?'Победа!':'Поражение';
+  document.getElementById('go-sub').textContent   = iWon?`${esc(go.loserName)} разоблачён.`:'Ваши связи уничтожены.';
   document.getElementById('go-tokens-row').innerHTML =
     `<span>${esc(go.winnerName)}: <strong>${go.winnerTokens} ◆</strong></span>
      <span style="margin:0 8px;opacity:.4">|</span>
      <span>${esc(go.loserName)}: <strong>${go.loserTokens} ◆</strong></span>`;
   document.getElementById('go-pending').textContent='';
-  overlay.classList.add('show');
+  document.getElementById('game-over').classList.add('show');
   tg?.HapticFeedback?.notificationOccurred?.(iWon?'success':'error');
 }
-document.getElementById('btn-rematch').addEventListener('click', () => { socket.emit('rematch'); document.getElementById('go-pending').textContent='Ждём соперника…'; });
+document.getElementById('btn-rematch').addEventListener('click',()=>{ socket.emit('rematch'); document.getElementById('go-pending').textContent='Ждём соперника…'; });
 document.getElementById('btn-to-menu').addEventListener('click', leaveToMenu);
 
 // ─── ВСПОМОГАТЕЛЬНЫЕ ───
-function leaveToMenu() {
-  stopRoundTimer();
-  socket?.emit('leave'); socket?.disconnect(); socket=null;
+function leaveToMenu(){
+  stopRoundTimer(); socket?.emit('leave'); socket?.disconnect(); socket=null;
   currentRoomId=null; resetState(); closeAllOverlays(); showScreen('menu');
 }
-function closeAllOverlays() { document.querySelectorAll('.overlay').forEach(o=>o.classList.remove('show')); }
-function showToast(msg) {
+function closeAllOverlays(){ document.querySelectorAll('.overlay').forEach(o=>o.classList.remove('show')); }
+function showToast(msg){
   const t=document.getElementById('toast');
-  t.textContent=msg; t.classList.add('show');
-  setTimeout(()=>t.classList.remove('show'),2500);
+  t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2500);
 }
-function esc(s) {
+function esc(s){
   return String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
