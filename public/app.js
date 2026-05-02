@@ -1,5 +1,5 @@
 // =====================================================================
-// Тёмная Дуэль — Frontend v3.2
+// Тёмная Дуэль — Frontend v3.3
 // =====================================================================
 const tg = window.Telegram?.WebApp;
 if (tg) { tg.ready(); tg.expand(); tg.setHeaderColor?.('#08050f'); tg.setBackgroundColor?.('#08050f'); }
@@ -146,50 +146,62 @@ function renderLobbyPlayers(players) {
 // ─── СОСТОЯНИЕ ───
 let lastState = null;
 let pendingCard = null;
+let pendingCardElement = null;  // ссылка на DOM-элемент моей выбранной карты
 let roundTimerInterval = null;
 let prevOppDiscardLen = 0;
 let prevOppHandCount  = 0;
 
+// Очередь состояний — если анимация идёт, ставим в очередь
+let stateQueue = [];
+let busyAnimating = false;
+
 function resetState() {
-  lastState = null; pendingCard = null;
+  lastState = null; pendingCard = null; pendingCardElement = null;
   prevOppDiscardLen = 0; prevOppHandCount = 0;
+  stateQueue = []; busyAnimating = false;
   stopRoundTimer();
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// ОБРАБОТКА НОВОГО СОСТОЯНИЯ
-// Ключевой принцип: если соперник сыграл карту — сначала анимируем
-// улёт, потом рендерим новое состояние. Зону ЯВНО очищаем перед
-// рендером — иначе старый элемент с animations:forwards мешает.
+// ОБРАБОТКА СОСТОЯНИЯ
+// Если идёт анимация — кладём в очередь, чтобы не сбить визуал.
 // ═══════════════════════════════════════════════════════════════════
 function handleNewState(s) {
+  if (busyAnimating) {
+    stateQueue.push(s);
+    return;
+  }
+  processState(s);
+}
+
+function processState(s) {
   const isFirst = !lastState;
 
-  // Соперник сыграл карту: его сброс вырос
+  // Соперник сыграл карту — его сброс вырос
   const oppPlayed = !isFirst
-    && s.opponent
-    && lastState.opponent
+    && s.opponent && lastState.opponent
     && (s.opponent.discard.length > prevOppDiscardLen);
 
   if (oppPlayed) {
-    // Шаг 1: запускаем анимацию улёта текущей карты соперника
-    animateOppPlay(() => {
-      // Шаг 2: явно очищаем зону (удаляем элемент с закончившейся анимацией)
-      document.getElementById('opp-card-zone').innerHTML = '';
-      // Шаг 3: сохраняем новое состояние и рендерим
+    // Берём последнюю карту из сброса соперника — это та, что он только что сыграл
+    const playedCard = s.opponent.discard[s.opponent.discard.length - 1];
+    busyAnimating = true;
+    // Обновляем лог сразу — пусть игрок видит текст пока идёт анимация
+    updateLogStrip(s.log);
+    animateOppRevealAndPlay(playedCard, () => {
       lastState = s;
       prevOppDiscardLen = s.opponent?.discard?.length || 0;
       prevOppHandCount  = s.opponent?.handCount || 0;
       renderState(s, false, true /* oppJustPlayed */);
+      busyAnimating = false;
+      // Если в очереди есть состояние — обрабатываем
+      if (stateQueue.length > 0) {
+        const next = stateQueue.shift();
+        setTimeout(() => processState(next), 50);
+      }
     });
-    // Обновляем лог немедленно, не дожидаясь анимации
-    updateLogStrip(s.log);
-    playCardSound();
   } else {
-    // Обычный рендер без анимации улёта
-    const oppDrewCard = !isFirst
-      && s.opponent
-      && lastState.opponent
+    const oppDrewCard = !isFirst && s.opponent && lastState.opponent
       && s.opponent.handCount > prevOppHandCount;
 
     lastState = s;
@@ -201,17 +213,86 @@ function handleNewState(s) {
   }
 }
 
-// Запускает анимацию улёта карты соперника, затем вызывает callback
-function animateOppPlay(callback) {
+// ───────────────────────────────────────────────────────────────────
+// АНИМАЦИЯ ХОДА СОПЕРНИКА
+// 1) Карта зумится ко мне (увеличивается + смещается вниз к экрану)
+// 2) В середине зума — кросс-фейд через .face-up класс показывает,
+//    что соперник сыграл (рубашка → лицо)
+// 3) Карта улетает в сброс
+// 4) После завершения вызываем callback (рендер нового состояния)
+// ───────────────────────────────────────────────────────────────────
+function animateOppRevealAndPlay(playedCard, callback) {
   const zone = document.getElementById('opp-card-zone');
   const existing = zone.querySelector('.card');
-  if (existing && !existing.classList.contains('opp-playing')) {
-    existing.classList.add('opp-playing');
-    // Ждём окончания CSS-анимации (0.65s) и ещё немного для надёжности
-    setTimeout(callback, 700);
-  } else {
-    // Карты нет или анимация уже идёт — рендерим сразу
+
+  // Если по каким-то причинам элемента нет — просто рендерим
+  if (!existing || !playedCard) {
+    if (existing) zone.innerHTML = '';
     callback();
+    return;
+  }
+
+  // Убираем свечение чтобы не мешало анимации
+  existing.classList.remove('opp-turn-glow');
+
+  // Подставляем картинку сыгранной карты на лицевую сторону
+  const face = existing.querySelector('.card-face');
+  face.innerHTML = '';
+  const img = document.createElement('img');
+  img.src = `assets/cards/${playedCard.value}.png`;
+  img.onerror = () => { img.style.display = 'none'; };
+  img.alt = '';
+  face.appendChild(img);
+
+  // Фаза 1: зум к экрану (650мс)
+  existing.classList.add('opp-zoom');
+
+  // Фаза 2: на середине зума — переворот через face-up (плавный кросс-фейд 350мс)
+  setTimeout(() => {
+    existing.classList.add('face-up');
+    playCardSound();
+  }, 280);
+
+  // Фаза 3: после зума — улёт в сброс (550мс)
+  setTimeout(() => {
+    existing.classList.remove('opp-zoom');
+    existing.classList.add('opp-fly');
+  }, 700);
+
+  // Фаза 4: завершение, очищаем зону и рендерим новое состояние
+  setTimeout(() => {
+    zone.innerHTML = '';
+    callback();
+  }, 1250);
+}
+
+// ───────────────────────────────────────────────────────────────────
+// АНИМАЦИЯ МОЕГО ХОДА
+// Карта подлетает (зум вверх) → улетает в сброс
+// Эмитим play на сервер ПОСЛЕ окончания анимации
+// ───────────────────────────────────────────────────────────────────
+function animateMyPlayAndEmit(card, cardElement, extraData = {}) {
+  if (!cardElement || !cardElement.parentElement) {
+    socket.emit('play', { cardId: card.id, ...extraData });
+    return;
+  }
+
+  busyAnimating = true;
+  // Снимаем свечение чтобы не мешало
+  cardElement.classList.remove('my-turn-glow');
+  cardElement.classList.add('my-playing');
+
+  setTimeout(() => {
+    socket.emit('play', { cardId: card.id, ...extraData });
+    // Через короткое время разрешаем рендер новых состояний
+    setTimeout(() => { busyAnimating = false; flushStateQueue(); }, 200);
+  }, 600); // ждём пока анимация закончится
+}
+
+function flushStateQueue() {
+  if (stateQueue.length > 0 && !busyAnimating) {
+    const next = stateQueue.shift();
+    processState(next);
   }
 }
 
@@ -222,8 +303,8 @@ function renderState(s, isFirst, oppJustPlayed) {
   // Имена / статусы
   document.getElementById('me-name').textContent  = s.me?.name  || 'Вы';
   document.getElementById('opp-name').textContent = s.opponent?.name || 'Соперник';
-  document.getElementById('me-status').textContent  = s.isMyTurn   ? 'твой ход'     : (s.me?.protected       ? 'под защитой' : '');
-  document.getElementById('opp-status').textContent = !s.isMyTurn  ? 'ходит'        : (s.opponent?.protected ? 'под защитой' : '');
+  document.getElementById('me-status').textContent  = s.isMyTurn   ? 'твой ход' : (s.me?.protected       ? 'под защитой' : '');
+  document.getElementById('opp-status').textContent = !s.isMyTurn  ? 'ходит'    : (s.opponent?.protected ? 'под защитой' : '');
 
   // Аватары
   const setAv = (id,url) => { if(url) document.getElementById(id).style.backgroundImage=`url('${url}')`; };
@@ -234,21 +315,18 @@ function renderState(s, isFirst, oppJustPlayed) {
   renderTokens('me-tokens',  s.me?.tokens  || 0);
   renderTokens('opp-tokens', s.opponent?.tokens || 0);
 
-  // Карта соперника
-  // Если только что анимировали улёт — зона уже очищена, рендерим новую карту
+  // Карты
   renderOppCard(s, isFirst, oppJustPlayed);
-
-  // Мои карты
   renderMyCards(s, isFirst);
 
   // Исключённые
   renderExcluded(s.excludedCards || []);
 
-  // Сбросы (animate last — только если это первый рендер после улёта)
+  // Сбросы
   renderDiscard('me-discard',  s.me?.discard  || [], false);
   renderDiscard('opp-discard', s.opponent?.discard || [], oppJustPlayed);
 
-  // Счётчик колоды
+  // Колода
   document.getElementById('deck-count-badge').textContent = s.deckCount;
 
   // Лог
@@ -266,8 +344,6 @@ function renderState(s, isFirst, oppJustPlayed) {
 // ─── КАРТА СОПЕРНИКА ───
 function renderOppCard(s, isFirst, oppJustPlayed) {
   const zone = document.getElementById('opp-card-zone');
-  // ВАЖНО: НЕ проверяем .opp-playing — зона уже очищена перед вызовом renderState.
-  // Просто всегда рендерим свежую карту.
   zone.innerHTML = '';
   if (!s.opponent || s.opponent.handCount === 0) return;
 
@@ -277,12 +353,11 @@ function renderOppCard(s, isFirst, oppJustPlayed) {
   if (!s.isMyTurn) card.classList.add('opp-turn-glow');
 
   if (isFirst) {
-    // Первый рендер — карта прилетает сверху (раздача)
     card.classList.add('dealing');
     card.style.animationDelay = '0s';
   } else if (oppJustPlayed) {
-    // Соперник только что сыграл и взял новую карту — прилетает
-    card.classList.add('opp-dealing');
+    // Соперник только что сыграл — новая карта прилетает
+    card.classList.add('opp-incoming');
     playCardSound();
   }
 
@@ -300,32 +375,35 @@ function renderMyCards(s, isFirst) {
   s.me.hand.forEach((c, idx) => {
     const wrap = document.createElement('div'); wrap.className='play-arrow-wrap';
 
-    if (myTurn) {
-      const arrow = document.createElement('div');
-      arrow.className='play-arrow'; arrow.title='Сыграть';
-      arrow.addEventListener('click', e => { e.stopPropagation(); onPlay(c); });
-      wrap.appendChild(arrow);
-    }
-
     const cardEl = makeCard(c, true, 'card--big');
     if (myTurn) cardEl.classList.add('my-turn-glow');
     if (isFirst) { cardEl.classList.add('dealing'); cardEl.style.animationDelay=`${idx*.2+.15}s`; }
 
-    // Бейдж видено X/N — сверху справа чтобы не обрезалось
+    // Бейдж видено X/N — теперь снаружи карты, не обрезается
     const seen  = (s.me?.seenCounts||{})[c.value] || 0;
     const total = CARDS[c.value]?.total || '?';
     const badge = document.createElement('div'); badge.className='card-seen-badge';
     badge.textContent = `${seen}/${total}`;
     cardEl.appendChild(badge);
 
+    // Тап = зум
     cardEl.addEventListener('click', e => { e.stopPropagation(); openZoom(c, s.me?.seenCounts||{}); });
+
+    if (myTurn) {
+      const arrow = document.createElement('div');
+      arrow.className='play-arrow'; arrow.title='Сыграть';
+      // Передаём элемент карты в onPlay чтобы потом анимировать его
+      arrow.addEventListener('click', e => { e.stopPropagation(); onPlay(c, cardEl); });
+      wrap.appendChild(arrow);
+    }
+
     wrap.appendChild(cardEl);
     row.appendChild(wrap);
   });
   zone.appendChild(row);
 }
 
-// ─── СОЗДАНИЕ КАРТЫ ───
+// ─── СОЗДАНИЕ КАРТЫ (БЕЗ цифр в углах) ───
 function makeCard(card, faceUp, sizeClass) {
   const el = document.createElement('div');
   el.className = `card ${sizeClass||'card--big'}${faceUp?' face-up':''}`;
@@ -338,9 +416,7 @@ function makeCard(card, faceUp, sizeClass) {
     img.src=`assets/cards/${card.value}.png`;
     img.onerror=()=>img.style.display='none'; img.alt='';
     face.appendChild(img);
-    const tl=document.createElement('div'); tl.className='card-corner tl'; tl.textContent=card.value;
-    const br=document.createElement('div'); br.className='card-corner br'; br.textContent=card.value;
-    face.appendChild(tl); face.appendChild(br);
+    // ← НЕТ card-corner элементов, чтобы цифры не загораживали картинку
   }
   el.appendChild(face);
   return el;
@@ -399,12 +475,13 @@ function renderTokens(id, count) {
 }
 
 // ─── СЫГРАТЬ КАРТУ ───
-function onPlay(card) {
+function onPlay(card, cardElement) {
   if (!lastState?.isMyTurn) return;
   pendingCard = card;
+  pendingCardElement = cardElement;
   if      (card.value === 1) openGuessModal(card);
   else if (card.value === 5) openTargetModal(card);
-  else { socket.emit('play', { cardId:card.id }); pendingCard=null; }
+  else { animateMyPlayAndEmit(card, cardElement); }
 }
 
 // Детектив (1)
@@ -415,7 +492,12 @@ function openGuessModal(card) {
     if (v===1) continue;
     const opt=document.createElement('div'); opt.className='am-opt';
     opt.innerHTML=`<span class="num">${v}</span>${CARDS[v].name}`;
-    opt.addEventListener('click', () => { socket.emit('play',{cardId:card.id,guess:v}); pendingCard=null; el.classList.remove('show'); });
+    opt.addEventListener('click', () => {
+      el.classList.remove('show');
+      // Анимируем + эмитим с задержкой
+      animateMyPlayAndEmit(card, pendingCardElement, { guess: v });
+      pendingCard = null;
+    });
     grid.appendChild(opt);
   }
   el.classList.add('show');
@@ -430,14 +512,18 @@ function openTargetModal(card) {
   [{id:'self',label:me,sub:'себя'},{id:'opp',label:opp,sub:'соперника'}].forEach(t => {
     const o=document.createElement('div'); o.className='am-opt';
     o.innerHTML=`<span class="num">★</span>${esc(t.label)}<br/><small style="opacity:.5;font-size:9px">${t.sub}</small>`;
-    o.addEventListener('click', () => { socket.emit('play',{cardId:card.id,target:t.id}); pendingCard=null; el.classList.remove('show'); });
+    o.addEventListener('click', () => {
+      el.classList.remove('show');
+      animateMyPlayAndEmit(card, pendingCardElement, { target: t.id });
+      pendingCard = null;
+    });
     opts.appendChild(o);
   });
   el.classList.add('show');
 }
 
-document.getElementById('action-cancel').addEventListener('click', () => { pendingCard=null; document.getElementById('action-modal').classList.remove('show'); });
-document.getElementById('target-cancel').addEventListener('click', () => { pendingCard=null; document.getElementById('target-modal').classList.remove('show'); });
+document.getElementById('action-cancel').addEventListener('click', () => { pendingCard=null; pendingCardElement=null; document.getElementById('action-modal').classList.remove('show'); });
+document.getElementById('target-cancel').addEventListener('click', () => { pendingCard=null; pendingCardElement=null; document.getElementById('target-modal').classList.remove('show'); });
 
 // ─── ТЕНЕВОЙ БРОКЕР ───
 function showChancellor(cards) {
@@ -460,7 +546,6 @@ function openZoom(card, seenCounts) {
   const wrap=document.getElementById('cz-card-img'); wrap.innerHTML='';
   const img=document.createElement('img'); img.src=`assets/cards/${card.value}.png`; img.onerror=()=>img.style.display='none'; img.alt='';
   wrap.appendChild(img);
-  const cn=document.createElement('div'); cn.className='card-corner tl'; cn.textContent=card.value; wrap.appendChild(cn);
   document.getElementById('cz-name').textContent  = def.name;
   document.getElementById('cz-value').textContent = `Карта ${card.value}`;
   document.getElementById('cz-desc').textContent  = def.desc;
