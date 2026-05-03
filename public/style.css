@@ -135,11 +135,19 @@ button { font-family:inherit; border:none; cursor:pointer; color:inherit; backgr
 .card--exc { width:30px; height:53px; }
 
 .card-face, .card-back { position:absolute; inset:0; border-radius:8px; overflow:hidden; border:1px solid rgba(201,150,58,.38); box-shadow:0 4px 14px rgba(0,0,0,.6); transition:opacity .35s ease; background:var(--bg-1); }
-.card-face img, .card-back img, .cz-card img, .do-mini img {
+/* Лицевые карты и зум вписываем аккуратно (contain) */
+.card-face img, .cz-card img, .do-mini img {
   width:100%; height:100%; 
-  object-fit:contain !important; /* ГАРАНТИЯ ЧТО НЕ ОБРЕЖЕТСЯ НИГДЕ */
+  object-fit:contain !important; 
   display:block; 
 }
+
+/* А рубашку растягиваем на всю площадь (cover), чтобы спрятать фон и звезду! */
+.card-back img { 
+  position:absolute; inset:0; width:100%; height:100%; 
+  object-fit:cover !important; 
+}
+
 
 .card-back { background:radial-gradient(ellipse at 40% 35%, #321a4a, #110b1e); display:flex; align-items:center; justify-content:center; }
 .card-back::before { content:'✦'; font-size:30px; color:var(--gold); text-shadow:0 0 14px rgba(201,150,58,.7); position:relative; z-index:0; }
