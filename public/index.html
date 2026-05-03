@@ -3,12 +3,8 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no"/>
-<meta name="theme-color" content="#08050f"/>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%2308050f'/%3E%3Ctext x='50%25' y='55%25' font-size='44' text-anchor='middle' fill='%23c9963a' font-family='serif' dominant-baseline='middle'%3E✦%3C/text%3E%3C/svg%3E"/>
 <title>Тёмная Дуэль</title>
-<link rel="preconnect" href="https://fonts.googleapis.com"/>
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,500&family=Playfair+Display:ital,wght@0,700;1,500&family=Manrope:wght@400;500;600&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,700;1,500&family=Playfair+Display:wght@700&family=Manrope:wght@400;600&display=swap" rel="stylesheet"/>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <script src="/socket.io/socket.io.js"></script>
 <link rel="stylesheet" href="style.css"/>
@@ -17,214 +13,80 @@
 
 <audio id="bgm" src="assets/sounds/music.mp3" loop preload="auto"></audio>
 
-<!-- ═══ ЗАСТАВКА ═══ -->
 <section id="intro" class="screen active">
   <div class="intro-layer" data-layer="1"><img src="assets/intro/panel1.png" alt=""/></div>
-  <div class="intro-layer" data-layer="2"><img src="assets/intro/panel2.png" alt=""/></div>
-  <div class="intro-layer" data-layer="3"><img src="assets/intro/panel3.png" alt=""/></div>
   <div class="intro-hint">тапни, чтобы продолжить</div>
 </section>
 
-<!-- ═══ МЕНЮ ═══ -->
 <section id="menu" class="screen">
   <div class="menu-bg"></div>
   <header class="menu-header">
     <div class="logo-glyph">✦</div>
     <h1 class="game-title">Тёмная<br/>Дуэль</h1>
-    <div class="game-sub">карточный поединок на двоих</div>
   </header>
   <div class="menu-actions">
-    <button class="btn btn-primary" id="btn-invite">
-      <span>Пригласить друга</span>
-      <small>отправить ссылку в Telegram</small>
-    </button>
-    <button class="btn btn-secondary" id="btn-quick">
-      <span>Быстрая партия</span>
-      <small>войти в случайную комнату</small>
-    </button>
-  </div>
-  <div class="online-strip">
-    <div class="online-strip-title">Сейчас в игре</div>
-    <div class="online-strip-list" id="online-list">
-      <div class="online-empty">Скоро здесь появятся друзья</div>
-    </div>
-  </div>
-  <footer class="menu-footer">6 жетонов — победа</footer>
-</section>
-
-<!-- ═══ ЛОББИ ═══ -->
-<section id="lobby" class="screen">
-  <div class="lobby-content">
-    <div class="lobby-spinner"></div>
-    <h2>Ожидание соперника</h2>
-    <div class="lobby-room">Комната: <span id="lobby-room-id">—</span></div>
-    <div class="lobby-players" id="lobby-players"></div>
-    <button class="btn btn-ghost" id="lobby-share">Поделиться ссылкой</button>
-    <button class="btn btn-ghost" id="lobby-cancel">Отменить</button>
+    <button class="btn btn-primary" id="btn-invite"><span>Пригласить друга</span></button>
   </div>
 </section>
 
-<!-- ═══ ИГРА ═══ -->
 <section id="game" class="screen">
   <div class="table-bg"></div>
 
-  <!-- ВЕРХ: зона соперника -->
   <div class="g-half g-top">
     <div class="g-player-bar">
-      <div class="g-av-wrap">
-        <div class="g-avatar" id="opp-avatar"></div>
-        <div>
-          <div class="g-name" id="opp-name">Соперник</div>
-          <div class="g-status" id="opp-status"></div>
-        </div>
-      </div>
-      <div class="g-tokens" id="opp-tokens"></div>
+      <div class="g-avatar" id="opp-avatar"></div>
+      <div class="g-name" id="opp-name">Соперник</div>
     </div>
     <div class="g-card-center" id="opp-card-zone"></div>
-    <div class="g-discard-strip">
-      <span class="g-discard-label">Сброс</span>
-      <div class="g-discard-row" id="opp-discard"></div>
-    </div>
+    <div class="g-discard-row" id="opp-discard"></div>
   </div>
 
-  <!-- СЕРЕДИНА: исключённые карты + лог -->
   <div class="g-middle">
-    <!-- Исключённые (3 карты лицом вверх, видны всем) -->
-    <div class="excluded-zone" id="excluded-zone">
-      <div class="excluded-label">Исключено из раунда</div>
-      <div class="excluded-cards" id="excluded-cards"></div>
-    </div>
-    <!-- Лог + кнопка колоды -->
     <div class="g-log-strip" id="log-strip">
       <div class="g-log-lines">
-        <div class="g-log-line g-log-line--1" id="log-line-1">—</div>
-        <div class="g-log-line g-log-line--2" id="log-line-2"></div>
+        <div class="g-log-line" id="log-line-1">—</div>
       </div>
-      <button class="g-deck-btn" id="deck-btn">
-        <span class="deck-icon">🂠</span>
-        <span class="deck-count" id="deck-count-badge">16</span>
-      </button>
+      <button class="g-deck-btn" id="deck-btn">🂠 <span id="deck-count-badge">16</span></button>
     </div>
   </div>
 
-  <!-- НИЗ: моя зона -->
   <div class="g-half g-bottom">
-    <div class="g-discard-strip">
-      <span class="g-discard-label">Мой сброс</span>
-      <div class="g-discard-row" id="me-discard"></div>
-    </div>
+    <div class="g-discard-row" id="me-discard"></div>
     <div class="g-card-center" id="my-card-zone"></div>
     <div class="g-player-bar">
-      <div class="g-av-wrap">
-        <div class="g-avatar" id="me-avatar"></div>
-        <div>
-          <div class="g-name" id="me-name">Вы</div>
-          <div class="g-status" id="me-status"></div>
-        </div>
-      </div>
-      <div class="g-tokens" id="me-tokens"></div>
+      <div class="g-avatar" id="me-avatar"></div>
+      <div class="g-name" id="me-name">Вы</div>
     </div>
   </div>
 
-  <!-- ═══ ОВЕРЛЕИ ═══ -->
-
-  <!-- Зум карты (тап) -->
   <div class="overlay card-zoom" id="card-zoom">
     <div class="cz-inner">
       <div class="cz-card" id="cz-card-img"></div>
       <div class="cz-info">
         <div class="cz-name" id="cz-name"></div>
-        <div class="cz-value" id="cz-value"></div>
         <div class="cz-desc" id="cz-desc"></div>
-        <div class="cz-seen" id="cz-seen"></div>
       </div>
     </div>
-    <div class="overlay-hint">тапни чтобы закрыть</div>
   </div>
 
-  <!-- Полный лог -->
-  <div class="overlay log-overlay" id="log-overlay">
-    <div class="lo-inner">
-      <div class="lo-title">История</div>
-      <div class="lo-list" id="lo-list"></div>
-    </div>
-    <div class="overlay-hint">тапни чтобы закрыть</div>
-  </div>
-
-  <!-- Полное распределение колоды -->
-  <div class="overlay deck-overlay" id="deck-overlay">
-    <div class="do-inner">
-      <div class="lo-title">Все карты в игре</div>
-      <div class="do-grid" id="do-grid"></div>
-    </div>
-    <div class="overlay-hint">тапни чтобы закрыть</div>
-  </div>
-
-  <!-- Угадать карту (Детектив/1) -->
-  <div class="overlay action-modal" id="action-modal">
-    <div class="am-inner">
-      <div class="am-title" id="action-title">Назови карту соперника</div>
-      <div class="am-subtitle">Не угадываешь Детектива</div>
-      <div class="am-grid" id="action-options"></div>
-      <button class="btn btn-ghost" id="action-cancel">Отмена</button>
-    </div>
-  </div>
-
-  <!-- Выбор цели (Федерал/5) -->
-  <div class="overlay target-modal" id="target-modal">
-    <div class="am-inner">
-      <div class="am-title">Кого отправить на обыск?</div>
-      <div class="am-grid am-grid--2" id="target-options"></div>
-      <button class="btn btn-ghost" id="target-cancel">Отмена</button>
-    </div>
-  </div>
-
-  <!-- Теневой брокер (Chancellor/6): выбрать 1 из 3 -->
-  <div class="overlay chancellor-modal" id="chancellor-modal">
-    <div class="am-inner">
-      <div class="am-title">Выбери карту для руки</div>
-      <div class="am-subtitle">Остальные уйдут вниз колоды</div>
-      <div class="chancellor-cards" id="chancellor-cards"></div>
-    </div>
-  </div>
-
-  <!-- Peek (Журналист/2) -->
   <div class="overlay peek-overlay" id="peek-overlay">
     <div class="am-inner">
       <div class="am-title" id="peek-title">У соперника</div>
       <div class="peek-card-wrap" id="peek-card"></div>
-      <button class="btn btn-primary" id="peek-close">Закрыть</button>
-    </div>
-  </div>
-
-  <!-- Конец раунда -->
-  <div class="overlay round-over" id="round-over">
-    <div class="ro-inner">
-      <div class="ro-glyph" id="ro-glyph">✦</div>
-      <div class="ro-title" id="ro-title">Раунд окончен</div>
-      <div class="ro-sub"  id="ro-sub"></div>
-      <div class="ro-tokens-row" id="ro-tokens-row"></div>
-      <div class="ro-auto">новый раунд через <span id="ro-timer">4</span>…</div>
-    </div>
-  </div>
-
-  <!-- Конец игры -->
-  <div class="overlay game-over" id="game-over">
-    <div class="ro-inner">
-      <div class="ro-glyph" id="go-glyph">✦</div>
-      <div class="ro-title" id="go-title">Игра окончена</div>
-      <div class="ro-sub"  id="go-sub"></div>
-      <div class="ro-tokens-row" id="go-tokens-row"></div>
-      <div class="result-actions">
-        <button class="btn btn-primary" id="btn-rematch">Сыграть снова</button>
-        <button class="btn btn-ghost"  id="btn-to-menu">В меню</button>
+      <div class="peek-info">
+          <div class="cz-name" id="peek-card-name" style="font-size: 18px;"></div>
+          <div class="cz-desc" id="peek-card-desc" style="font-size: 12px; max-width: 240px;"></div>
       </div>
-      <div class="ro-auto" id="go-pending"></div>
+      <button class="btn btn-primary" id="peek-close" style="margin-top: 15px;">Закрыть</button>
     </div>
   </div>
 
-  <!-- Тост -->
-  <div class="toast" id="toast"></div>
+  <div class="overlay action-modal" id="action-modal">
+    <div class="am-inner">
+      <div class="am-title">Назови карту</div>
+      <div class="am-grid" id="action-options"></div>
+    </div>
+  </div>
 </section>
 
 <script src="app.js"></script>
