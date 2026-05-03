@@ -1,6 +1,6 @@
 // =====================================================================
-// Тёмная Дуэль — Backend v3
-// Правила: Love Letter 2nd Edition (21 карта, 2 игрока = 6 жетонов)
+// Тёмная Дуэль — Backend v3.5 (Фикс счетчика карт)
+// Правила: Love Letter 2019 Edition (21 карта, 2 игрока = 6 жетонов)
 // =====================================================================
 const express = require('express');
 const http    = require('http');
@@ -11,7 +11,6 @@ const app    = express();
 const server = http.createServer(app);
 const io     = new Server(server, { cors:{ origin:'*', methods:['GET','POST'] } });
 
-// Явные MIME-типы (важно для Render)
 app.use(express.static(path.join(__dirname, 'public'), {
   setHeaders(res, fp) {
     const t = {
@@ -45,9 +44,8 @@ const CARD_DEFS = {
   8: { name:'Роковая женщина',count:1, ability:'Ничего не делает. Но: если на руке есть Федерал (5) или Босс мафии (7) — ОБЯЗАН сыграть Роковую женщину.' },
   9: { name:'Компромат',      count:1, ability:'Если сброшен по любой причине — ты немедленно выбываешь.' },
 };
-// Итого: 2+6+2+2+2+2+2+1+1+1 = 21 карта ✓
 
-const WIN_TOKENS = 6; // для 2 игроков
+const WIN_TOKENS = 6;
 
 // ===================================================================
 // СТРОИМ КОЛОДУ
@@ -72,14 +70,19 @@ function shuffle(arr) {
 }
 
 // ===================================================================
-// УЧЁТ ПРОСМОТРЕННЫХ КАРТ (приватно для каждого игрока)
+// УЧЁТ ПРОСМОТРЕННЫХ КАРТ (ФИКС ДВОЙНОГО СЧЕТА)
+// Храним уникальные ID карт, чтобы не считать одну карту дважды
 // ===================================================================
-function addSeen(room, userId, value) {
-  if (!room.seenCounts[userId]) room.seenCounts[userId] = {};
-  room.seenCounts[userId][value] = (room.seenCounts[userId][value] || 0) + 1;
+function addSeen(room, userId, card) {
+  if (!card || card.value === undefined || !card.id) return;
+  if (!room.seenCards) room.seenCards = {};
+  if (!room.seenCards[userId]) room.seenCards[userId] = new Map();
+  room.seenCards[userId].set(card.id, card.value);
 }
-function addSeenBoth(room, value) {
-  for (const p of room.players) addSeen(room, p.userId, value);
+
+function addSeenBoth(room, card) {
+  if (!card) return;
+  for (const p of room.players) addSeen(room, p.userId, card);
 }
 
 // ===================================================================
@@ -92,11 +95,12 @@ class Room {
     this.id = id;
     this.players = [];
     this.state = null;
-    this.tokens = {};          // userId → int
-    this.seenCounts = {};      // userId → { value: count }
+    this.tokens = {};          
+    this.seenCards = {};       // userId → Map(card.id → card.value)
     this.roundTimeout = null;
     this.rematchVotes = new Set();
   }
+  
   addPlayer(p) {
     if (this.players.length >= 2) return false;
     const ex = this.players.find(x => x.userId === p.userId);
@@ -104,6 +108,7 @@ class Room {
     this.players.push(p);
     return true;
   }
+  
   removeBySocket(sid) {
     this.players = this.players.filter(p => p.socketId !== sid);
   }
@@ -116,6 +121,15 @@ class Room {
     const myId = me?.userId;
     const cur  = s.players[s.turn];
 
+    // Вычисляем seenCounts на лету из уникальных карт
+    const mySeenMap = this.seenCards ? this.seenCards[myId] : null;
+    const computedSeenCounts = {};
+    if (mySeenMap) {
+       for (const val of mySeenMap.values()) {
+           computedSeenCounts[val] = (computedSeenCounts[val] || 0) + 1;
+       }
+    }
+
     return {
       isMyTurn:    cur?.socketId === forSocketId && !s.pendingChancellor && !s.roundOver && !s.gameOver,
       turnName:    cur?.name,
@@ -123,7 +137,7 @@ class Room {
       roundOver:   s.roundOver  || null,
       gameOver:    s.gameOver   || null,
       deckCount:   s.deck.length,
-      excludedCards: s.excludedCards, // 3 открытые исключённые карты
+      excludedCards: s.excludedCards, 
       pendingChancellor: s.pendingChancellor?.socketId === forSocketId ? s.pendingChancellor.options : null,
       me: me && {
         name:      me.name,
@@ -133,7 +147,7 @@ class Room {
         protected: me.protected,
         eliminated:me.eliminated,
         tokens:    this.tokens[me.userId] || 0,
-        seenCounts:this.seenCounts[myId]  || {},
+        seenCounts:computedSeenCounts,
       },
       opponent: opp && {
         name:      opp.name,
@@ -157,24 +171,22 @@ function startRound(room, resetTokens = false) {
   if (resetTokens || Object.keys(room.tokens).length === 0) {
     for (const p of room.players) room.tokens[p.userId] = 0;
   }
-  // Обнуляем seenCounts для нового раунда
-  room.seenCounts = {};
-  for (const p of room.players) room.seenCounts[p.userId] = {};
+  
+  room.seenCards = {};
+  for (const p of room.players) room.seenCards[p.userId] = new Map();
 
   const deck = buildDeck();
 
-  // 1 карта лицом вниз (сожжённая)
   const burned = deck.shift();
 
-  // 3 карты лицом вверх (для 2 игроков) — оба видят
   const excludedCards = [];
   for (let i = 0; i < 3 && deck.length > 0; i++) {
     const c = deck.shift();
     excludedCards.push(c);
-    addSeenBoth(room, c.value);
+    addSeenBoth(room, c);
   }
 
-  const players = room.players.map((p, idx) => ({
+  const players = room.players.map((p) => ({
     socketId:  p.socketId,
     userId:    p.userId,
     name:      p.name,
@@ -186,15 +198,14 @@ function startRound(room, resetTokens = false) {
     mustPlayCountess: false,
   }));
 
-  // Раздаём по 1 карте, первый берёт ещё одну
   for (const pl of players) {
     const c = deck.shift();
     pl.hand.push(c);
-    addSeen(room, pl.userId, c.value);
+    addSeen(room, pl.userId, c);
   }
   const c2 = deck.shift();
   players[0].hand.push(c2);
-  addSeen(room, players[0].userId, c2.value);
+  addSeen(room, players[0].userId, c2);
   updateCountess(players[0]);
 
   room.state = {
@@ -225,21 +236,18 @@ function checkSpyBonus(room) {
 
 function endRound(room, winnerUserId) {
   const s = room.state;
-  if (room.roundTimeout) return; // уже завершён
+  if (room.roundTimeout) return; 
 
   const winner = s.players.find(p => p.userId === winnerUserId);
   const loser  = s.players.find(p => p.userId !== winnerUserId);
 
-  // Показываем руки всех выживших (если конец по колоде)
   const revealedHands = {};
   for (const pl of s.players.filter(p => !p.eliminated)) {
     revealedHands[pl.userId] = pl.hand;
   }
 
-  // +1 жетон победителю раунда
   room.tokens[winnerUserId] = (room.tokens[winnerUserId] || 0) + 1;
 
-  // Бонус Информатора (шпиона)
   const spyBonus = checkSpyBonus(room);
   if (spyBonus) {
     room.tokens[spyBonus] = (room.tokens[spyBonus] || 0) + 1;
@@ -250,7 +258,6 @@ function endRound(room, winnerUserId) {
   const winnerTokens = room.tokens[winnerUserId];
   const loserTokens  = room.tokens[loser?.userId] || 0;
 
-  // Проверка победы в игре
   if (winnerTokens >= WIN_TOKENS) {
     s.gameOver = {
       winnerId:    winnerUserId,
@@ -269,7 +276,6 @@ function endRound(room, winnerUserId) {
       revealedHands,
       spyBonus,
     };
-    // Автостарт нового раунда через 4 сек
     room.roundTimeout = setTimeout(() => {
       startRound(room, false);
       io.to(room.id).emit('new_round');
@@ -294,9 +300,7 @@ function nextTurn(room) {
   }
 
   if (s.deck.length === 0) {
-    // Конец по колоде — сравниваем карты
     const ranked = [...alive].sort((a,b) => b.hand[0]?.value - a.hand[0]?.value);
-    // Ничья по номиналу → по сумме сбросов
     if (ranked.length >= 2 && ranked[0].hand[0]?.value === ranked[1].hand[0]?.value) {
       const sum = p => p.discard.reduce((a,c) => a + c.value, 0);
       ranked.sort((a,b) => sum(b)-sum(a));
@@ -306,18 +310,16 @@ function nextTurn(room) {
     return;
   }
 
-  // Передаём ход
   let next = (s.turn+1) % s.players.length;
   while (s.players[next].eliminated) next = (next+1) % s.players.length;
   s.turn = next;
 
   const cur = s.players[next];
-  cur.protected = false;  // защита снимается в начале своего хода
+  cur.protected = false;  
 
-  // Взять карту
   const drawn = s.deck.shift();
   cur.hand.push(drawn);
-  addSeen(room, cur.userId, drawn.value);
+  addSeen(room, cur.userId, drawn);
   updateCountess(cur);
 }
 
@@ -340,25 +342,24 @@ function playCard(room, socketId, payload) {
   if (me.mustPlayCountess && card.value !== 8)
     return { error:'На руке Роковая женщина (8) — обязан сыграть её.' };
 
-  // Снимаем с руки, кладём в сброс (оба видят)
   me.hand.splice(idx, 1);
   me.discard.push(card);
-  addSeenBoth(room, card.value);
+  addSeenBoth(room, card);
   logMsg(room, `${me.name} играет «${CARD_DEFS[card.value].name}» [${card.value}].`);
 
   const opp = s.players.find(p => p.socketId !== socketId && !p.eliminated);
 
   switch (card.value) {
-    case 0: { // Информатор — ничего (бонус в конце раунда)
+    case 0: { 
       logMsg(room, `Информатор сыгран. Бонус считается в конце раунда.`);
       break;
     }
-    case 1: { // Детектив — угадай карту
+    case 1: { 
       if (!opp || opp.protected) { logMsg(room, opp ? `${opp.name} под защитой.`:'Нет цели.'); break; }
       if (guess === undefined || guess < 0 || guess > 9 || guess === 1)
         return rollback(room, me, card, 'Назови карту от 0 до 9 (не Детектив).');
       if (opp.hand[0]?.value === guess) {
-        addSeenBoth(room, opp.hand[0].value);
+        addSeenBoth(room, opp.hand[0]);
         opp.discard.push(...opp.hand.splice(0));
         opp.eliminated = true;
         logMsg(room, `🎯 Угадано! У ${opp.name} был ${CARD_DEFS[guess].name}. Выбывает.`);
@@ -367,9 +368,9 @@ function playCard(room, socketId, payload) {
       }
       break;
     }
-    case 2: { // Журналист — посмотри карту
+    case 2: { 
       if (!opp || opp.protected) { logMsg(room, opp ? `${opp.name} под защитой.`:'Нет цели.'); break; }
-      addSeen(room, me.userId, opp.hand[0]?.value);
+      addSeen(room, me.userId, opp.hand[0]);
       io.to(me.socketId).emit('peek', {
         playerName: opp.name,
         card: opp.hand[0],
@@ -378,16 +379,17 @@ function playCard(room, socketId, payload) {
       logMsg(room, `${me.name} тайно смотрит карту ${opp.name}.`);
       break;
     }
-    case 3: { // Громила — сравни карты
+    case 3: { 
       if (!opp || opp.protected) { logMsg(room, opp ? `${opp.name} под защитой.`:'Нет цели.'); break; }
-      const mv = me.hand[0]?.value, ov = opp.hand[0]?.value;
+      const mvCard = me.hand[0], ovCard = opp.hand[0];
+      const mv = mvCard?.value, ov = ovCard?.value;
       if (mv === undefined || ov === undefined) break;
       if (mv > ov) {
-        addSeenBoth(room, ov);
+        addSeenBoth(room, ovCard);
         opp.discard.push(...opp.hand.splice(0)); opp.eliminated = true;
         logMsg(room, `Разборка: ${me.name}(${mv}) > ${opp.name}(${ov}). ${opp.name} выбывает.`);
       } else if (mv < ov) {
-        addSeenBoth(room, mv);
+        addSeenBoth(room, mvCard);
         me.discard.push(...me.hand.splice(0)); me.eliminated = true;
         logMsg(room, `Разборка: ${me.name}(${mv}) < ${opp.name}(${ov}). ${me.name} выбывает.`);
       } else {
@@ -395,64 +397,62 @@ function playCard(room, socketId, payload) {
       }
       break;
     }
-    case 4: { // Продажный коп — защита
+    case 4: { 
       me.protected = true;
       logMsg(room, `${me.name} под защитой Продажного копа до следующего хода.`);
       break;
     }
-    case 5: { // Федерал — сброс + новая карта
+    case 5: { 
       const tgt = target === 'self' ? me : opp;
       if (!tgt) break;
       if (tgt.protected && tgt !== me) { logMsg(room, `${tgt.name} под защитой.`); break; }
       const dropped = tgt.hand.shift();
       tgt.discard.push(dropped);
-      addSeenBoth(room, dropped?.value);
+      addSeenBoth(room, dropped);
       if (dropped?.value === 9) {
-        // Компромат при сбросе — выбывает
         tgt.eliminated = true;
         logMsg(room, `💀 ${tgt.name} сбросил Компромат — выбывает!`);
       } else {
-        // Берёт новую карту (из колоды или из «сожжённой»)
         if (s.deck.length > 0) {
           const newCard = s.deck.shift();
           tgt.hand.push(newCard);
-          addSeen(room, tgt.userId, newCard.value);
+          addSeen(room, tgt.userId, newCard);
         } else if (s.burned) {
-          tgt.hand.push(s.burned); s.burned = null;
+          tgt.hand.push(s.burned);
+          addSeen(room, tgt.userId, s.burned);
+          s.burned = null;
         }
         logMsg(room, `Облава! ${tgt.name} сбрасывает карту и берёт новую.`);
       }
       updateCountess(tgt);
       break;
     }
-    case 6: { // Теневой брокер — берёт 2, кладёт 2 вниз
+    case 6: { 
       const extra = [];
       if (s.deck.length > 0) extra.push(s.deck.shift());
       if (s.deck.length > 0) extra.push(s.deck.shift());
-      // Все 3 карты (1 в руке + 2 взятых) игрок видит
       const options = [...me.hand, ...extra];
-      for (const c of options) addSeen(room, me.userId, c.value);
+      for (const c of options) addSeen(room, me.userId, c);
       s.pendingChancellor = { socketId, options };
       logMsg(room, `${me.name} изучает варианты Теневого брокера…`);
       io.to(socketId).emit('chancellor_choice', { cards: options });
-      emitState(room); // отправляем состояние (без nextTurn)
+      emitState(room); 
       return { ok: true };
     }
-    case 7: { // Босс мафии — обмен картами
+    case 7: { 
       if (!opp || opp.protected) { logMsg(room, opp ? `${opp.name} под защитой.`:'Нет цели.'); break; }
-      // Оба видят карты друг друга при обмене
-      if (me.hand[0]) addSeen(room, opp.userId, me.hand[0].value);
-      if (opp.hand[0]) addSeen(room, me.userId, opp.hand[0].value);
+      if (me.hand[0]) addSeen(room, opp.userId, me.hand[0]);
+      if (opp.hand[0]) addSeen(room, me.userId, opp.hand[0]);
       [me.hand, opp.hand] = [opp.hand, me.hand];
       updateCountess(me); updateCountess(opp);
       logMsg(room, `Дон приказал — ${me.name} и ${opp.name} меняются картами.`);
       break;
     }
-    case 8: { // Роковая женщина — нет эффекта
+    case 8: { 
       logMsg(room, `${me.name} избавляется от Роковой женщины.`);
       break;
     }
-    case 9: { // Компромат — сброс = выбывание
+    case 9: { 
       me.eliminated = true;
       logMsg(room, `💀 ${me.name} сбросил Компромат — выбывает!`);
       break;
@@ -522,7 +522,6 @@ io.on('connection', socket => {
     else emitState(room);
   });
 
-  // Теневой брокер: игрок выбрал какую карту оставить
   socket.on('chancellor_pick', keepCardId => {
     const room = rooms.get(socket.data.roomId);
     if (!room) return;
@@ -537,7 +536,7 @@ io.on('connection', socket => {
     const me = s.players.find(p => p.socketId === socket.id);
     me.hand = [kept];
     updateCountess(me);
-    // Возвращаем 2 карты в низ колоды (перемешиваем порядок)
+    
     shuffle(returns);
     s.deck.push(...returns);
     s.pendingChancellor = null;
