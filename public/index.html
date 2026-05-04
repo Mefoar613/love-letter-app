@@ -97,7 +97,11 @@
         <div class="g-log-line g-log-line--1" id="log-line-1">—</div>
         <div class="g-log-line g-log-line--2" id="log-line-2"></div>
       </div>
-      <button class="g-deck-btn" id="deck-btn"><span class="deck-icon">🂠</span><span class="deck-count" id="deck-count-badge">16</span></button>
+      <!-- Кнопка колоды теперь показывает твою рубашку! -->
+      <button class="g-deck-btn" id="deck-btn">
+        <div id="deck-back-preview" style="width:24px;height:42px;border-radius:3px;background-size:cover;background-position:center;border:1px solid var(--gold-b);margin-bottom:2px;"></div>
+        <span class="deck-count" id="deck-count-badge">16</span>
+      </button>
     </div>
   </div>
 
@@ -110,7 +114,7 @@
     </div>
   </div>
 
-  <!-- СЛОЙ ДЛЯ VFX (Анимации ударов/взрывов) -->
+  <!-- СЛОЙ ДЛЯ VFX -->
   <div id="vfx-layer"></div>
 
   <!-- ОВЕРЛЕИ -->
@@ -134,7 +138,6 @@
     <div class="do-inner">
       <button class="btn-close-cross" id="do-close">&times;</button>
       <div class="lo-title">Справочник карт</div>
-      <!-- Зона для описания при клике на карту -->
       <div id="do-detail-box" style="display:none; background:rgba(0,0,0,0.4); padding:10px; border-radius:8px; margin-bottom:10px; border:1px solid var(--gold); text-align:center;">
         <div id="do-detail-name" style="color:var(--gold-b); font-weight:bold; font-size:16px;"></div>
         <div id="do-detail-desc" style="color:var(--ink-d); font-size:12px; margin-top:4px;"></div>
@@ -177,7 +180,7 @@
     </div>
   </div>
 
-  <!-- ПРОЗРАЧНЫЙ БАННЕР РАУНДА (БОЛЬШЕ НЕ ЗАТЕМНЯЕТ ЭКРАН) -->
+  <!-- ПРОЗРАЧНЫЙ БАННЕР РАУНДА -->
   <div class="overlay round-over" id="round-over">
     <div class="ro-inner">
       <div class="ro-title" id="ro-title">Раунд завершен</div>
