@@ -1,5 +1,5 @@
 // =====================================================================
-// Тёмная Дуэль — Frontend v7 (Queue, Badges, VFX, Pacing)
+// Тёмная Дуэль — Frontend v8 (Smooth Animations, Real Badges, Own Back)
 // =====================================================================
 const tg = window.Telegram?.WebApp;
 if(tg){tg.ready();tg.expand();tg.setHeaderColor?.('#08050f');tg.setBackgroundColor?.('#08050f');}
@@ -82,7 +82,6 @@ function connectSocket(){
   socket.on('game_started',()=>{showScreen('game');closeAllOverlays();resetGameState();});
   
   socket.on('vfx', data => {
-    // ВАЖНО: Ставим эффекты в очередь
     if (busyAnimating || isOverlayOpen()) stateQueue.push({ type: 'vfx', payload: data });
     else handleVFX(data);
   });
@@ -161,7 +160,6 @@ let lastState=null, pendingCard=null, pendingCardElement=null;
 let stateQueue=[], busyAnimating=false, prevOppDiscardLen=0;
 
 function isOverlayOpen() {
-  // Проверяем, открыто ли окно (зум, справочник, модалка действий)
   return document.querySelectorAll('.overlay.show:not(#round-over):not(#game-over)').length > 0;
 }
 
@@ -185,12 +183,15 @@ function processState(s) {
   const isFirst = !lastState;
   const oppPlayed = !isFirst && s.opponent && lastState.opponent && (s.opponent.discard.length > prevOppDiscardLen);
 
+  // ПОКАЗЫВАЕМ ТВОЮ РУБАШКУ В КОЛОДЕ
+  document.getElementById('deck-back-preview').style.backgroundImage = `url('assets/backs/${mySelectedBack}.png')`;
+
   if (oppPlayed) {
     const playedCard = s.opponent.discard[s.opponent.discard.length - 1];
     busyAnimating = true;
     updateLogStrip(s.log);
     
-    // Новая медленная анимация с вылетом в центр
+    // ИСПРАВЛЕНО: ПЛАВНЫЙ БРОСОК ЧЕРЕЗ JS
     animateOppReveal(playedCard, s.opponent.back || 'back', () => {
       lastState = s;
       prevOppDiscardLen = s.opponent?.discard?.length || 0;
@@ -199,7 +200,6 @@ function processState(s) {
       flushQueue();
     });
   } else {
-    // Тряска при вылете
     if (lastState && lastState.me && !lastState.me.eliminated && s.me && s.me.eliminated) {
       shakeScreen(); 
     }
@@ -210,6 +210,7 @@ function processState(s) {
   }
 }
 
+// ПЛАВНАЯ АНИМАЦИЯ БРОСКА
 function animateOppReveal(playedCard, backName, cb) {
   const zone = document.getElementById('opp-card-zone');
   const ex = zone.querySelector('.card');
@@ -217,8 +218,12 @@ function animateOppReveal(playedCard, backName, cb) {
 
   ex.classList.remove('opp-turn-glow');
   
-  // 1. Карта летит на центр (рубашкой вверх)
-  ex.classList.add('opp-center-facedown');
+  // Добавляем плавный transition к карте
+  ex.style.transition = 'transform 0.7s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.5s ease';
+  
+  // 1. Карта мягко подлетает в центр
+  ex.style.transform = 'translateY(16vh) scale(1.6)';
+  ex.style.zIndex = '50';
   playSound('card');
 
   // 2. Переворот
@@ -228,14 +233,15 @@ function animateOppReveal(playedCard, backName, cb) {
     ex.classList.add('face-up');
     playSound('card');
 
-    // 3. Пауза, чтобы игрок прочитал (1 секунда)
+    // 3. Пауза 1.5 секунды, чтобы ты увидел карту
     setTimeout(() => {
-      ex.classList.remove('opp-center-facedown');
-      ex.classList.add('opp-fly');
-      setTimeout(() => { zone.innerHTML = ''; cb(); }, 550);
-    }, 1000); 
+      // 4. Плавно улетает в сброс
+      ex.style.transform = 'translate(-35vw, 35vh) scale(0.4) rotate(-25deg)';
+      ex.style.opacity = '0';
+      setTimeout(() => { zone.innerHTML = ''; cb(); }, 600);
+    }, 1500); 
 
-  }, 500); 
+  }, 700); 
 }
 
 // ─── VFX ОБРАБОТЧИК (Анимации экшена) ───
@@ -269,22 +275,46 @@ function handleVFX(data) {
   }
   else if (data.type === 'detective') {
     playSound('card');
-    layer.innerHTML = `<div class="vfx-detective-text">Ищет: ${CARDS[data.guess].name}</div>`;
+    const g = document.createElement('div');
+    g.className = 'vfx-detective-group';
+    g.innerHTML = `
+      <div class="vfx-detective-text">Проверяет: ${CARDS[data.guess].name}</div>
+      <div class="vfx-card" style="position:relative;"><img src="assets/cards/1.png"></div>
+    `;
+    layer.appendChild(g);
+
     if (data.hit) {
-      const c = document.createElement('div'); c.className = 'vfx-card vfx-flip-detective';
-      c.innerHTML = `<img src="assets/cards/${data.targetCard}.png">`;
-      layer.appendChild(c);
-      setTimeout(() => { playSound('clash'); triggerVibe('medium'); }, 1000);
-      animDuration = 2800; // Долго висит, чтобы было видно
+      // Если попал, через секунду появляется перевернутая карта противника
+      setTimeout(() => {
+        g.innerHTML += `<div class="vfx-card vfx-flip-target" style="position:relative;"><img src="assets/cards/${data.targetCard}.png"></div>`;
+        playSound('clash'); triggerVibe('heavy');
+      }, 1200);
+      animDuration = 3500;
     } else {
-      setTimeout(() => { playSound('click'); }, 1000);
-      animDuration = 1500;
+      // Если промазал, плашка улетает
+      setTimeout(() => {
+        g.style.opacity = '0';
+        g.style.transform = 'translateY(-100px)';
+        playSound('click');
+      }, 1500);
+      animDuration = 2000;
     }
   }
   else if (data.type === 'journalist') {
     playSound('magic');
-    layer.innerHTML = `<div class="vfx-eyes">👀</div>`;
-    animDuration = 1500;
+    const g = document.createElement('div');
+    g.className = 'vfx-detective-group';
+    g.innerHTML = `
+      <div class="vfx-detective-text" style="font-size:24px;">👀 Подглядывает...</div>
+      <div class="vfx-card" style="position:relative;"><img src="assets/cards/2.png"></div>
+    `;
+    layer.appendChild(g);
+    
+    setTimeout(() => {
+        g.style.opacity = '0';
+        g.style.transform = 'translateY(-100px)';
+    }, 2000);
+    animDuration = 2500;
   }
 
   setTimeout(() => {
@@ -402,13 +432,14 @@ function onPlay(card,cardEl){
   }
 }
 
-// ДЕТЕКТИВ: ЗНАЧОК "ВИДЕНО" ПРЯМО НА КНОПКЕ
+// ДЕТЕКТИВ: ЗНАЧКИ ВНУТРИ КНОПКИ (ИСПРАВЛЕНО!)
 function openGuessModal(card){
   const el=document.getElementById('action-modal'),g=document.getElementById('action-options');g.innerHTML='';
   for(let v=0;v<=9;v++){
     if(v===1)continue;
     const o=document.createElement('div');o.className='am-opt';
     const seen=(lastState?.me?.seenCounts||{})[v]||0;
+    
     o.innerHTML=`
       <div class="card-seen-badge" style="top:-4px;right:-4px;font-size:10px;padding:3px 5px;">${seen}/${CARDS[v].total}</div>
       <span class="num">${v}</span>${CARDS[v].name}
