@@ -1,5 +1,5 @@
 // =====================================================================
-// Тёмная Дуэль — Frontend v5 (VFX Action, UI Fixes, Invite Links)
+// Тёмная Дуэль — Frontend v7 (Queue, Badges, VFX, Pacing)
 // =====================================================================
 const tg = window.Telegram?.WebApp;
 if(tg){tg.ready();tg.expand();tg.setHeaderColor?.('#08050f');tg.setBackgroundColor?.('#08050f');}
@@ -10,7 +10,6 @@ const ME = {
   avatar:tgUser?.photo_url||null,
 };
 
-// ССЫЛКА НА БОТА ДЛЯ ИНВАЙТОВ!
 const BOT_LINK = "https://t.me/PumpHuntRealBot/POGNALI";
 
 const CARDS={
@@ -49,6 +48,7 @@ function playSound(type='click'){
     if(type==='card'){ o.type='sine';o.frequency.setValueAtTime(300,n);o.frequency.exponentialRampToValueAtTime(160,n+.16);g.gain.setValueAtTime(.16,n);g.gain.exponentialRampToValueAtTime(.001,n+.19);o.start(n);o.stop(n+.2); }
     if(type==='clash'){ o.type='square';o.frequency.setValueAtTime(150,n);o.frequency.exponentialRampToValueAtTime(50,n+.3);g.gain.setValueAtTime(.3,n);g.gain.exponentialRampToValueAtTime(.001,n+.4);o.start(n);o.stop(n+.5); }
     if(type==='burn'){ o.type='sawtooth';o.frequency.setValueAtTime(100,n);o.frequency.linearRampToValueAtTime(200,n+.5);g.gain.setValueAtTime(.2,n);g.gain.linearRampToValueAtTime(.001,n+.6);o.start(n);o.stop(n+.7); }
+    if(type==='magic'){ o.type='sine';o.frequency.setValueAtTime(400,n);o.frequency.exponentialRampToValueAtTime(800,n+.4);g.gain.setValueAtTime(.1,n);g.gain.exponentialRampToValueAtTime(.001,n+.5);o.start(n);o.stop(n+.6); }
   }catch(e){}
 }
 document.body.addEventListener('click',e=>{if(e.target.closest('.btn,.am-opt,.g-deck-btn,.g-log-strip,.play-arrow,.chancellor-option,.lb-card,.back-option,#intro,.btn-close-cross,.do-row'))playSound('click');},true);
@@ -60,10 +60,8 @@ function shakeScreen() {
   triggerVibe('heavy'); playSound('clash');
 }
 
-// ─── ЭКРАНЫ ───
+// ─── ЭКРАНЫ И ЛОББИ ───
 function showScreen(id){document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('active',s.id===id));}
-
-// ─── ЗАСТАВКА ───
 let introStep=0;
 const introLayers=document.querySelectorAll('.intro-layer'),introHint=document.querySelector('.intro-hint');
 function advanceIntro(){startMusic();if(introStep<introLayers.length){introLayers[introStep].classList.add('show');introStep++;if(introStep===introLayers.length)introHint.textContent='тапни, чтобы войти';}else{document.getElementById('intro').removeEventListener('click',advanceIntro);setTimeout(()=>showScreen('menu'),220);}}
@@ -72,8 +70,7 @@ window.addEventListener('load',()=>{advanceIntro();document.getElementById('intr
   if(sp){document.getElementById('intro').classList.remove('active');showScreen('menu');setTimeout(()=>{socket.emit('join_lobby',{lobbyId:sp,user:ME});showScreen('lobby');},500);}
 });
 
-// ─── SOCKET ───
-let socket=null;
+let socket=null, currentLobby=null;
 function connectSocket(){
   if(socket?.connected)return;
   socket=io({transports:['websocket','polling']});
@@ -84,11 +81,14 @@ function connectSocket(){
   socket.on('lobby_joined',onLobbyJoined);
   socket.on('game_started',()=>{showScreen('game');closeAllOverlays();resetGameState();});
   
-  // ВАЖНО: VFX События
-  socket.on('vfx', data => handleVFX(data));
+  socket.on('vfx', data => {
+    // ВАЖНО: Ставим эффекты в очередь
+    if (busyAnimating || isOverlayOpen()) stateQueue.push({ type: 'vfx', payload: data });
+    else handleVFX(data);
+  });
 
   socket.on('new_round',()=>{closeAllOverlays();});
-  socket.on('state',s=>handleNewState(s));
+  socket.on('state', s => handleNewState(s));
   socket.on('peek',d=>showPeek(d));
   socket.on('chancellor_choice',d=>showChancellor(d.cards));
   socket.on('rematch_pending',({count})=>{document.getElementById('go-pending').textContent=count>=1?'Ждём…':'';});
@@ -96,7 +96,6 @@ function connectSocket(){
   socket.on('error_msg',msg=>showToast(msg));
 }
 
-// ═══ МЕНЮ И ЛОББИ ═══
 document.getElementById('btn-play').addEventListener('click',()=>showScreen('lobby-browser'));
 document.getElementById('btn-backs').addEventListener('click',()=>{renderBacks();showScreen('backs');});
 document.getElementById('lb-back').addEventListener('click',()=>showScreen('menu'));
@@ -114,7 +113,6 @@ function renderLobbyList(list){
   });
 }
 
-let currentLobby=null;
 function onLobbyJoined(lobby){
   currentLobby=lobby; document.getElementById('lobby-room-id').textContent=lobby.id;
   const amCreator=lobby.players.length>0 && lobby.players[0]?.userId===ME.id;
@@ -140,18 +138,13 @@ document.getElementById('btn-leave-lobby').addEventListener('click',leaveLobby);
 document.getElementById('btn-leave-lobby2').addEventListener('click',leaveLobby);
 function leaveLobby(){socket.emit('leave_lobby');currentLobby=null;showScreen('lobby-browser');}
 
-// ПРИГЛАШЕНИЕ ПО ССЫЛКЕ
 document.getElementById('btn-invite-friend').addEventListener('click', () => {
   if(!currentLobby) return;
   const link = `${BOT_LINK}?startapp=${currentLobby.id}`;
-  if (tg?.openTelegramLink) {
-    tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent('ПОГНАЛИ!')}`);
-  } else {
-    navigator.clipboard?.writeText(link); showToast('Ссылка скопирована!');
-  }
+  if (tg?.openTelegramLink) tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent('ПОГНАЛИ!')}`);
+  else { navigator.clipboard?.writeText(link); showToast('Ссылка скопирована!'); }
 });
 
-// ═══ РУБАШКИ ═══
 document.getElementById('backs-back').addEventListener('click',()=>showScreen('menu'));
 function renderBacks(){
   const grid=document.getElementById('backs-grid');grid.innerHTML='';
@@ -163,78 +156,141 @@ function renderBacks(){
   });
 }
 
-// ═══ ИГРОВОЕ СОСТОЯНИЕ ═══
-let lastState=null,pendingCard=null,pendingCardElement=null;
-let stateQueue=[],busyAnimating=false;
+// ═══ ИГРОВОЕ СОСТОЯНИЕ (ОЧЕРЕДЬ И ПАУЗЫ) ═══
+let lastState=null, pendingCard=null, pendingCardElement=null;
+let stateQueue=[], busyAnimating=false, prevOppDiscardLen=0;
 
-function resetGameState(){
-  lastState=null;pendingCard=null;pendingCardElement=null;
-  stateQueue=[];busyAnimating=false;
-  document.getElementById('vfx-layer').innerHTML='';
+function isOverlayOpen() {
+  // Проверяем, открыто ли окно (зум, справочник, модалка действий)
+  return document.querySelectorAll('.overlay.show:not(#round-over):not(#game-over)').length > 0;
 }
 
-function handleNewState(s){
-  if(busyAnimating){stateQueue.push(s);return;}
+function flushQueue() {
+  if (stateQueue.length > 0 && !busyAnimating && !isOverlayOpen()) {
+    const next = stateQueue.shift();
+    if (next.type === 'state') processState(next.payload);
+    else if (next.type === 'vfx') handleVFX(next.payload);
+  }
+}
+
+function handleNewState(s) {
+  if (busyAnimating || isOverlayOpen()) {
+    stateQueue.push({ type: 'state', payload: s });
+    return;
+  }
   processState(s);
 }
 
-function processState(s){
-  lastState=s;
-  renderState(s);
-  if(stateQueue.length>0 && !busyAnimating){const n=stateQueue.shift();setTimeout(()=>processState(n),50);}
+function processState(s) {
+  const isFirst = !lastState;
+  const oppPlayed = !isFirst && s.opponent && lastState.opponent && (s.opponent.discard.length > prevOppDiscardLen);
+
+  if (oppPlayed) {
+    const playedCard = s.opponent.discard[s.opponent.discard.length - 1];
+    busyAnimating = true;
+    updateLogStrip(s.log);
+    
+    // Новая медленная анимация с вылетом в центр
+    animateOppReveal(playedCard, s.opponent.back || 'back', () => {
+      lastState = s;
+      prevOppDiscardLen = s.opponent?.discard?.length || 0;
+      renderState(s);
+      busyAnimating = false;
+      flushQueue();
+    });
+  } else {
+    // Тряска при вылете
+    if (lastState && lastState.me && !lastState.me.eliminated && s.me && s.me.eliminated) {
+      shakeScreen(); 
+    }
+    lastState = s;
+    prevOppDiscardLen = s.opponent?.discard?.length || 0;
+    renderState(s);
+    flushQueue();
+  }
 }
 
-// ─── VFX ОБРАБОТЧИК (Анимации ударов) ───
+function animateOppReveal(playedCard, backName, cb) {
+  const zone = document.getElementById('opp-card-zone');
+  const ex = zone.querySelector('.card');
+  if (!ex || !playedCard) { if (ex) zone.innerHTML = ''; cb(); return; }
+
+  ex.classList.remove('opp-turn-glow');
+  
+  // 1. Карта летит на центр (рубашкой вверх)
+  ex.classList.add('opp-center-facedown');
+  playSound('card');
+
+  // 2. Переворот
+  setTimeout(() => {
+    const face = ex.querySelector('.card-face');
+    face.innerHTML = `<img src="assets/cards/${playedCard.value}.png" onerror="this.style.display='none'">`;
+    ex.classList.add('face-up');
+    playSound('card');
+
+    // 3. Пауза, чтобы игрок прочитал (1 секунда)
+    setTimeout(() => {
+      ex.classList.remove('opp-center-facedown');
+      ex.classList.add('opp-fly');
+      setTimeout(() => { zone.innerHTML = ''; cb(); }, 550);
+    }, 1000); 
+
+  }, 500); 
+}
+
+// ─── VFX ОБРАБОТЧИК (Анимации экшена) ───
 function handleVFX(data) {
   busyAnimating = true;
   const layer = document.getElementById('vfx-layer');
-  layer.innerHTML = ''; // очистка
-  
+  layer.innerHTML = ''; 
   let animDuration = 2000;
 
   if (data.type === 'baron') {
     playSound('card');
-    // Создаем две карты по центру
     const c1 = document.createElement('div'); c1.className = 'vfx-card vfx-clash-left';
     c1.innerHTML = `<img src="assets/cards/${data.p1Card}.png">`;
     const c2 = document.createElement('div'); c2.className = 'vfx-card vfx-clash-right';
     c2.innerHTML = `<img src="assets/cards/${data.p2Card}.png">`;
-    
     layer.appendChild(c1); layer.appendChild(c2);
     
-    // Кто проиграл?
     setTimeout(() => {
-      playSound('clash');
-      triggerVibe('heavy');
+      playSound('clash'); triggerVibe('heavy');
       if (data.winnerId === data.p1Id) c2.classList.add('vfx-clash-loser');
       else if (data.winnerId === data.p2Id) c1.classList.add('vfx-clash-loser');
-      // если ничья, никто не падает
     }, 1000);
     animDuration = 2000;
   } 
   else if (data.type === 'burn') {
-    playSound('burn');
-    triggerVibe('medium');
+    playSound('burn'); triggerVibe('medium');
     const c = document.createElement('div'); c.className = 'vfx-card vfx-burn';
-    c.innerHTML = `<img src="assets/cards/9.png">`; // компромат горит
+    c.innerHTML = `<img src="assets/cards/9.png">`; 
     layer.appendChild(c);
     animDuration = 1500;
   }
   else if (data.type === 'detective') {
     playSound('card');
-    const c = document.createElement('div'); c.className = 'vfx-card vfx-flip-detective';
-    // Лицевая сторона - карта которую угадали
-    c.innerHTML = `<img src="assets/cards/${data.targetCard}.png">`;
-    layer.appendChild(c);
-    setTimeout(() => { playSound('clash'); triggerVibe('medium'); }, 1000);
-    animDuration = 1800;
+    layer.innerHTML = `<div class="vfx-detective-text">Ищет: ${CARDS[data.guess].name}</div>`;
+    if (data.hit) {
+      const c = document.createElement('div'); c.className = 'vfx-card vfx-flip-detective';
+      c.innerHTML = `<img src="assets/cards/${data.targetCard}.png">`;
+      layer.appendChild(c);
+      setTimeout(() => { playSound('clash'); triggerVibe('medium'); }, 1000);
+      animDuration = 2800; // Долго висит, чтобы было видно
+    } else {
+      setTimeout(() => { playSound('click'); }, 1000);
+      animDuration = 1500;
+    }
+  }
+  else if (data.type === 'journalist') {
+    playSound('magic');
+    layer.innerHTML = `<div class="vfx-eyes">👀</div>`;
+    animDuration = 1500;
   }
 
-  // После анимации освобождаем очередь
   setTimeout(() => {
     layer.innerHTML = '';
     busyAnimating = false;
-    if(stateQueue.length > 0) { const n = stateQueue.shift(); processState(n); }
+    flushQueue();
   }, animDuration);
 }
 
@@ -281,7 +337,6 @@ function renderMyCards(s){
     const cardEl=makeCard(c,true,'card--big',myBack);
     if(myTurn)cardEl.classList.add('my-turn-glow');
     
-    // БЕЙДЖ "ВИДЕНО"
     const seen=(s.me?.seenCounts||{})[c.value]||0;
     const badge=document.createElement('div');badge.className='card-seen-badge';
     badge.textContent=`${seen}/${CARDS[c.value]?.total||'?'}`;
@@ -309,7 +364,6 @@ function makeCard(card,faceUp,sizeClass,backName){
 
 function updateLogStrip(log){
   const l=(log||[]).filter(Boolean);
-  // Берем ровно 2 последних действия без визуального увеличения блока (CSS ограничивает)
   document.getElementById('log-line-1').textContent=l[l.length-1]||'—';
   document.getElementById('log-line-2').textContent=l[l.length-2]||'';
 }
@@ -348,16 +402,20 @@ function onPlay(card,cardEl){
   }
 }
 
-// ДЕТЕКТИВ: ДОБАВЛЕН СЧЕТЧИК ВИДЕНО И КРЕСТИК ЗАКРЫТИЯ
+// ДЕТЕКТИВ: ЗНАЧОК "ВИДЕНО" ПРЯМО НА КНОПКЕ
 function openGuessModal(card){
   const el=document.getElementById('action-modal'),g=document.getElementById('action-options');g.innerHTML='';
   for(let v=0;v<=9;v++){
     if(v===1)continue;
     const o=document.createElement('div');o.className='am-opt';
     const seen=(lastState?.me?.seenCounts||{})[v]||0;
-    o.innerHTML=`<span class="num">${v}</span>${CARDS[v].name}<br/><small style="opacity:0.8;color:var(--gold-b)">Видено: ${seen}/${CARDS[v].total}</small>`;
+    o.innerHTML=`
+      <div class="card-seen-badge" style="top:-4px;right:-4px;font-size:10px;padding:3px 5px;">${seen}/${CARDS[v].total}</div>
+      <span class="num">${v}</span>${CARDS[v].name}
+    `;
     o.addEventListener('click',()=>{
       el.classList.remove('show');
+      flushQueue();
       pendingCardElement.classList.remove('my-turn-glow');pendingCardElement.classList.add('my-playing');playSound('card');
       setTimeout(()=>socket.emit('play',{cardId:card.id,guess:v}), 600);
     });
@@ -367,10 +425,11 @@ function openGuessModal(card){
 }
 function openTargetModal(card){
   const el=document.getElementById('target-modal'),o=document.getElementById('target-options');o.innerHTML='';
-  [{id:'self',label:lastState?.me?.name||'Я',sub:'себя'},{id:'opp',label:lastState?.opponent?.name||'Соперник',sub:'соперника'}].forEach(t=>{
-    const d=document.createElement('div');d.className='am-opt';d.innerHTML=`<span class="num">★</span>${esc(t.label)}<br/><small style="opacity:.5;font-size:9px">${t.sub}</small>`;
+  [{id:'self',label:lastState?.me?.name||'Я'},{id:'opp',label:lastState?.opponent?.name||'Соперник'}].forEach(t=>{
+    const d=document.createElement('div');d.className='am-opt';d.innerHTML=`<span class="num">★</span>${esc(t.label)}`;
     d.addEventListener('click',()=>{
       el.classList.remove('show');
+      flushQueue();
       pendingCardElement.classList.remove('my-turn-glow');pendingCardElement.classList.add('my-playing');playSound('card');
       setTimeout(()=>socket.emit('play',{cardId:card.id,target:t.id}), 600);
     });
@@ -382,31 +441,28 @@ function showChancellor(cards){
   const el=document.getElementById('chancellor-modal'),w=document.getElementById('chancellor-cards');w.innerHTML='';
   cards.forEach(c=>{const o=document.createElement('div');o.className='chancellor-option';const ce=makeCard(c,true,'card--big');
     const l=document.createElement('div');l.className='chancellor-choose-label';l.textContent='Выбрать';
-    o.addEventListener('click',()=>{socket.emit('chancellor_pick',c.id);el.classList.remove('show');});
+    o.addEventListener('click',()=>{socket.emit('chancellor_pick',c.id);el.classList.remove('show');flushQueue();});
     o.appendChild(ce);o.appendChild(l);w.appendChild(o);});el.classList.add('show');
 }
 
-function openZoom(card,seen){
+function openZoom(card){
   if(!card)return;const def=CARDS[card.value],w=document.getElementById('cz-card-img');w.innerHTML='';
   const img=document.createElement('img');img.src=`assets/cards/${card.value}.png`;img.onerror=()=>img.style.display='none';w.appendChild(img);
   document.getElementById('cz-name').textContent=def.name;document.getElementById('cz-value').textContent=`Карта ${card.value}`;
   document.getElementById('cz-desc').textContent=def.desc;
-  const s=(seen||{})[card.value]||0;document.getElementById('cz-seen').textContent=`Видено: ${s} из ${def.total}`;
   document.getElementById('card-zoom').classList.add('show');
 }
 
-// КОЛОДА: ДОБАВЛЕНО ОПИСАНИЕ ПРИ КЛИКЕ И КРЕСТИК ЗАКРЫТИЯ
 document.getElementById('deck-btn').addEventListener('click',e=>{
   e.stopPropagation();const g=document.getElementById('do-grid');g.innerHTML='';
-  document.getElementById('do-detail-box').style.display = 'none'; // прячем описание сначала
+  document.getElementById('do-detail-box').style.display = 'none'; 
   
   for(let v=0;v<=9;v++){
     const d=CARDS[v],r=document.createElement('div');r.className='do-row';
     const m=document.createElement('div');m.className='do-mini';const i=document.createElement('img');i.src=`assets/cards/${v}.png`;i.onerror=()=>i.style.display='none';m.appendChild(i);
-    const inf=document.createElement('div');inf.className='do-info';inf.innerHTML=`<div class="do-name">${d.name}</div><div class="do-cnt">${d.total}</div>`;
+    const inf=document.createElement('div');inf.className='do-info';inf.innerHTML=`<div class="do-name">${d.name}</div>`;
     r.appendChild(m);r.appendChild(inf);
     
-    // Клик показывает описание
     r.addEventListener('click', () => {
       document.getElementById('do-detail-box').style.display = 'block';
       document.getElementById('do-detail-name').textContent = d.name;
@@ -426,18 +482,13 @@ function showPeek(data){
   document.getElementById('peek-overlay').classList.add('show');
 }
 
-// ─── РЕЗУЛЬТАТЫ (ПРОЗРАЧНЫЙ БАННЕР, ТРЯСКА) ───
 function showRoundOver(ro){
   const ov=document.getElementById('round-over'), iW=ro.winnerId===ME.id;
   document.getElementById('ro-title').textContent = iW ? '✦ РАУНД ВАШ ✦' : '✗ ВЫБЫВАНИЕ ✗';
   document.getElementById('ro-title').style.color = iW ? 'var(--gold)' : 'var(--red-b)';
   document.getElementById('ro-sub').textContent = iW ? `${esc(ro.loserName)} теряет позиции` : `Вы потеряли позиции`;
-  
   if (!iW) shakeScreen(); else playSound('click');
-  
   ov.classList.add('show');
-  
-  // Баннер сам исчезнет без обратного отсчета через 3.5 секунды (настроено в CSS)
   setTimeout(()=>{ ov.classList.remove('show'); }, 3500);
 }
 
@@ -457,10 +508,12 @@ function closeAllOverlays(){document.querySelectorAll('.overlay').forEach(o=>o.c
 function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500);}
 function esc(s){return String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 
-// КРЕСТИКИ ЗАКРЫТИЯ (Новый способ)
-document.getElementById('cz-close').addEventListener('click', () => document.getElementById('card-zoom').classList.remove('show'));
-document.getElementById('lo-close').addEventListener('click', () => document.getElementById('log-overlay').classList.remove('show'));
-document.getElementById('do-close').addEventListener('click', () => document.getElementById('deck-overlay').classList.remove('show'));
-document.getElementById('action-cancel').addEventListener('click', () => { pendingCard=null; document.getElementById('action-modal').classList.remove('show'); });
-document.getElementById('target-cancel').addEventListener('click', () => { pendingCard=null; document.getElementById('target-modal').classList.remove('show'); });
-document.getElementById('peek-close').addEventListener('click', () => document.getElementById('peek-overlay').classList.remove('show'));
+// КРЕСТИКИ И СИНХРОНИЗАЦИЯ
+document.getElementById('cz-close').addEventListener('click', () => { document.getElementById('card-zoom').classList.remove('show'); flushQueue(); });
+document.getElementById('lo-close').addEventListener('click', () => { document.getElementById('log-overlay').classList.remove('show'); flushQueue(); });
+document.getElementById('do-close').addEventListener('click', () => { document.getElementById('deck-overlay').classList.remove('show'); flushQueue(); });
+document.getElementById('action-cancel').addEventListener('click', () => { pendingCard=null; document.getElementById('action-modal').classList.remove('show'); flushQueue(); });
+document.getElementById('target-cancel').addEventListener('click', () => { pendingCard=null; document.getElementById('target-modal').classList.remove('show'); flushQueue(); });
+document.getElementById('peek-close').addEventListener('click', () => { document.getElementById('peek-overlay').classList.remove('show'); flushQueue(); });
+
+function resetGameState(){ lastState=null; pendingCard=null; pendingCardElement=null; stateQueue=[]; busyAnimating=false; document.getElementById('vfx-layer').innerHTML=''; }
