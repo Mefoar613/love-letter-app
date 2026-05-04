@@ -1,5 +1,5 @@
 // =====================================================================
-// Тёмная Дуэль — Server v5 | VFX Events & Clean Persistent Logs
+// Тёмная Дуэль — Server v6 | VFX Events, Fix 3/2 Bug, Smart Bot Pacing
 // =====================================================================
 const express  = require('express');
 const http     = require('http');
@@ -103,8 +103,9 @@ const rooms = new Map();
 class Room {
   constructor(id) {
     this.id = id; this.players = []; this.state = null; this.tokens = {};
-    this.seenCounts = {}; this.roundTimeout = null; this.rematchVotes = new Set();
-    this.log = []; // Вечный лог для матча
+    this.seenCards = {}; // ИСПРАВЛЕНИЕ: Map уникальных карт
+    this.roundTimeout = null; this.rematchVotes = new Set();
+    this.log = []; 
     this.roundCount = 0;
   }
   addPlayer(p) {
@@ -119,23 +120,38 @@ class Room {
     const me  = s.players.find(p => p.socketId === forSocketId);
     const opp = s.players.find(p => p.socketId !== forSocketId);
     const cur = s.players[s.turn];
+
+    // ИСПРАВЛЕНИЕ: Конвертируем уникальные карты в счетчик
+    const computedSeenCounts = {};
+    if (me && this.seenCards[me.userId]) {
+       for (const val of this.seenCards[me.userId].values()) {
+           computedSeenCounts[val] = (computedSeenCounts[val] || 0) + 1;
+       }
+    }
+
     return {
       isMyTurn:    cur?.socketId === forSocketId && !s.pendingChancellor && !s.roundOver && !s.gameOver,
-      log:         this.log.slice(-50), // Весь лог (последние 50 записей)
+      log:         this.log.slice(-50),
       roundOver:   s.roundOver || null, gameOver: s.gameOver || null,
       deckCount:   s.deck.length, excludedCards: s.excludedCards,
       pendingChancellor: s.pendingChancellor?.socketId === forSocketId ? s.pendingChancellor.options : null,
-      me: me && { name:me.name, avatar:me.avatar, hand:me.hand, discard:me.discard, protected:me.protected, eliminated:me.eliminated, tokens:this.tokens[me.userId]||0, seenCounts:this.seenCounts[me.userId]||{}, back: me.back || 'back' },
+      me: me && { name:me.name, avatar:me.avatar, hand:me.hand, discard:me.discard, protected:me.protected, eliminated:me.eliminated, tokens:this.tokens[me.userId]||0, seenCounts:computedSeenCounts, back: me.back || 'back' },
       opponent: opp && { name:opp.name, avatar:opp.avatar, handCount:opp.hand.length, discard:opp.discard, protected:opp.protected, eliminated:opp.eliminated, tokens:this.tokens[opp.userId]||0, isBot: !!opp.isBot, back: opp.back || 'back' },
     };
   }
 }
 
-function addSeen(room, userId, val) {
-  if (!room.seenCounts[userId]) room.seenCounts[userId] = {};
-  room.seenCounts[userId][val] = (room.seenCounts[userId][val]||0)+1;
+// ИСПРАВЛЕНИЕ БАГА 3 ИЗ 2: Считаем по уникальному ID
+function addSeen(room, userId, card) {
+  if (!card || card.value === undefined || !card.id) return;
+  if (!room.seenCards) room.seenCards = {};
+  if (!room.seenCards[userId]) room.seenCards[userId] = new Map();
+  room.seenCards[userId].set(card.id, card.value);
 }
-function addSeenBoth(room, val) { for (const p of room.players) addSeen(room, p.userId, val); }
+function addSeenBoth(room, card) {
+  if (!card) return;
+  for (const p of room.players) addSeen(room, p.userId, card);
+}
 
 function startRound(room, resetTokens = false) {
   if (room.roundTimeout) { clearTimeout(room.roundTimeout); room.roundTimeout = null; }
@@ -147,13 +163,13 @@ function startRound(room, resetTokens = false) {
   room.roundCount++;
   room.log.push(`— РАУНД ${room.roundCount} —`);
   
-  room.seenCounts = {};
-  for (const p of room.players) room.seenCounts[p.userId] = {};
+  room.seenCards = {};
+  for (const p of room.players) room.seenCards[p.userId] = new Map();
 
   const deck = buildDeck();
   const burned = deck.shift();
   const excludedCards = [];
-  for (let i=0; i<3 && deck.length; i++) { const c = deck.shift(); excludedCards.push(c); addSeenBoth(room, c.value); }
+  for (let i=0; i<3 && deck.length; i++) { const c = deck.shift(); excludedCards.push(c); addSeenBoth(room, c); }
   
   const players = room.players.map(p => ({
     socketId:p.socketId, userId:p.userId, name:p.name, avatar:p.avatar||null,
@@ -161,14 +177,14 @@ function startRound(room, resetTokens = false) {
     hand:[], discard:[], protected:false, eliminated:false, mustPlayCountess:false,
   }));
   
-  for (const pl of players) { const c = deck.shift(); pl.hand.push(c); addSeen(room, pl.userId, c.value); }
-  const c2 = deck.shift(); players[0].hand.push(c2); addSeen(room, players[0].userId, c2.value);
+  for (const pl of players) { const c = deck.shift(); pl.hand.push(c); addSeen(room, pl.userId, c); }
+  const c2 = deck.shift(); players[0].hand.push(c2); addSeen(room, players[0].userId, c2);
   updateCountess(players[0]);
 
   room.state = { deck, burned, excludedCards, players, turn:0, roundOver:null, gameOver:null, pendingChancellor:null };
   room.rematchVotes.clear();
 
-  if (players[0].isBot) setTimeout(() => botTurn(room), 1200);
+  if (players[0].isBot) setTimeout(() => botTurn(room), 1500); // Чуть больше пауза на старте
 }
 
 function updateCountess(p) {
@@ -232,8 +248,10 @@ function nextTurn(room) {
   s.turn = next;
   const cur = s.players[next];
   cur.protected = false;
-  const drawn = s.deck.shift(); cur.hand.push(drawn); addSeen(room, cur.userId, drawn.value); updateCountess(cur);
-  if (cur.isBot && !s.roundOver && !s.gameOver) { emitState(room); setTimeout(() => botTurn(room), 1000 + Math.random()*800); }
+  const drawn = s.deck.shift(); cur.hand.push(drawn); addSeen(room, cur.userId, drawn); updateCountess(cur);
+  
+  // ИСПРАВЛЕНИЕ: Бот ходит реже, дает время
+  if (cur.isBot && !s.roundOver && !s.gameOver) { emitState(room); setTimeout(() => botTurn(room), 2500 + Math.random()*1500); }
 }
 
 function playCard(room, socketId, payload) {
@@ -248,30 +266,37 @@ function playCard(room, socketId, payload) {
   const card = me.hand[idx];
   if (me.mustPlayCountess && card.value !== 8) return { error:'Обязан сыграть Роковую женщину.' };
 
-  me.hand.splice(idx,1); me.discard.push(card); addSeenBoth(room, card.value);
+  me.hand.splice(idx,1); me.discard.push(card); addSeenBoth(room, card);
   const opp = s.players.find(p => p.userId !== me.userId && !p.eliminated);
   
-  // Упрощенный лог - только факт сыгранной карты
-  const cardNameNames = {0:'Информатор', 1:'Детектив', 2:'Журналист', 3:'Громила', 4:'Продажный коп', 5:'Федерал', 6:'Теневой брокер', 7:'Босс мафии', 8:'Роковая женщина', 9:'Компромат'};
-  logMsg(room, `${me.name}: ${cardNameNames[card.value]}`);
+  const cardNames = {0:'Информатор', 1:'Детектив', 2:'Журналист', 3:'Громила', 4:'Продажный коп', 5:'Федерал', 6:'Теневой брокер', 7:'Босс мафии', 8:'Роковая женщина', 9:'Компромат'};
+  logMsg(room, `${me.name}: ${cardNames[card.value]}`);
 
   switch(card.value) {
     case 0: break;
     case 1: {
       if(!opp||opp.protected){ break; }
       if(guess===undefined||guess<0||guess>9||guess===1) return rollback(room,me,card,'Назови 0-9, не 1.');
-      if(opp.hand[0]?.value===guess){
-        // АНИМАЦИЯ: ДЕТЕКТИВ
-        io.to(room.id).emit('vfx', { type:'detective', targetCard: opp.hand[0].value });
-        addSeenBoth(room,opp.hand[0].value); opp.discard.push(...opp.hand.splice(0)); opp.eliminated=true;
-        logMsg(room,`🎯 Выстрел в цель!`);
+      const hit = opp.hand[0]?.value === guess;
+      
+      // VFX Детектива
+      io.to(room.id).emit('vfx', { type:'detective', p1Id: me.userId, p2Id: opp.userId, guess: guess, hit: hit, targetCard: opp.hand[0]?.value });
+
+      if(hit){
+        addSeenBoth(room, opp.hand[0]); opp.discard.push(...opp.hand.splice(0)); opp.eliminated=true;
+        logMsg(room,`🎯 Угадано!`);
       } else logMsg(room,`Промах!`);
       break;
     }
     case 2: {
       if(!opp||opp.protected) break;
-      addSeen(room,me.userId,opp.hand[0]?.value);
-      if(!me.isBot) io.to(me.socketId).emit('peek',{playerName:opp.name,card:opp.hand[0],cardName:cardNameNames[opp.hand[0]?.value]});
+      addSeen(room, me.userId, opp.hand[0]);
+      
+      // VFX Журналиста
+      io.to(room.id).emit('vfx', { type:'journalist', p1Id: me.userId, p2Id: opp.userId });
+      
+      if(!me.isBot) io.to(me.socketId).emit('peek',{playerName:opp.name,card:opp.hand[0],cardName:cardNames[opp.hand[0]?.value]});
+      logMsg(room,`Смотрит карту.`);
       break;
     }
     case 3: {
@@ -280,10 +305,10 @@ function playCard(room, socketId, payload) {
       if(mv===undefined||ov===undefined)break;
       
       let winnerId = null;
-      if(mv>ov) { winnerId = me.userId; addSeenBoth(room,ov); opp.discard.push(...opp.hand.splice(0)); opp.eliminated=true; }
-      else if(mv<ov) { winnerId = opp.userId; addSeenBoth(room,mv); me.discard.push(...me.hand.splice(0)); me.eliminated=true; }
+      if(mv>ov) { winnerId = me.userId; addSeenBoth(room,opp.hand[0]); opp.discard.push(...opp.hand.splice(0)); opp.eliminated=true; logMsg(room, `Победа (${mv}>${ov})`);}
+      else if(mv<ov) { winnerId = opp.userId; addSeenBoth(room,me.hand[0]); me.discard.push(...me.hand.splice(0)); me.eliminated=true; logMsg(room, `Поражение (${mv}<${ov})`);}
+      else { logMsg(room, `Ничья (${mv}=${ov})`); }
       
-      // АНИМАЦИЯ: СТОЛКНОВЕНИЕ
       io.to(room.id).emit('vfx', { type:'baron', p1Id:me.userId, p2Id:opp.userId, p1Card:mv, p2Card:ov, winnerId });
       break;
     }
@@ -291,13 +316,13 @@ function playCard(room, socketId, payload) {
     case 5: {
       const tgt=target==='self'?me:opp;
       if(!tgt || (tgt.protected&&tgt!==me)) break;
-      const dropped=tgt.hand.shift(); tgt.discard.push(dropped); addSeenBoth(room,dropped?.value);
+      const dropped=tgt.hand.shift(); tgt.discard.push(dropped); addSeenBoth(room,dropped);
       if(dropped?.value===9){
         tgt.eliminated=true;
-        io.to(room.id).emit('vfx', { type:'burn' }); // АНИМАЦИЯ: СГОРАНИЕ
+        io.to(room.id).emit('vfx', { type:'burn' }); 
       }
       else {
-        if(s.deck.length>0){const nc=s.deck.shift();tgt.hand.push(nc);addSeen(room,tgt.userId,nc.value);}
+        if(s.deck.length>0){const nc=s.deck.shift();tgt.hand.push(nc);addSeen(room,tgt.userId,nc);}
         else if(s.burned){tgt.hand.push(s.burned);s.burned=null;}
       }
       updateCountess(tgt);
@@ -308,7 +333,7 @@ function playCard(room, socketId, payload) {
       if(s.deck.length>0)extra.push(s.deck.shift());
       if(s.deck.length>0)extra.push(s.deck.shift());
       const options=[...me.hand,...extra];
-      for(const c of options) addSeen(room,me.userId,c.value);
+      for(const c of options) addSeen(room,me.userId,c);
       if (me.isBot) { botChancellorPick(room, me, options); return { ok:true }; }
       s.pendingChancellor={socketId,options};
       io.to(socketId).emit('chancellor_choice',{cards:options});
@@ -316,8 +341,8 @@ function playCard(room, socketId, payload) {
     }
     case 7: {
       if(!opp||opp.protected) break;
-      if(me.hand[0])addSeen(room,opp.userId,me.hand[0].value);
-      if(opp.hand[0])addSeen(room,me.userId,opp.hand[0].value);
+      if(me.hand[0])addSeen(room,opp.userId,me.hand[0]);
+      if(opp.hand[0])addSeen(room,me.userId,opp.hand[0]);
       [me.hand,opp.hand]=[opp.hand,me.hand];
       updateCountess(me); updateCountess(opp);
       break;
@@ -325,7 +350,7 @@ function playCard(room, socketId, payload) {
     case 8: break;
     case 9: { 
       me.eliminated=true; 
-      io.to(room.id).emit('vfx', { type:'burn' }); // АНИМАЦИЯ: СГОРАНИЕ
+      io.to(room.id).emit('vfx', { type:'burn' }); 
       break; 
     }
   }
@@ -335,7 +360,7 @@ function playCard(room, socketId, payload) {
 }
 
 function rollback(room,me,card,err){me.discard.pop();me.hand.push(card);return{error:err};}
-function logMsg(room,msg){room.log.push(msg);} // Пишем в вечный лог
+function logMsg(room,msg){room.log.push(msg);} 
 function emitState(room){
   for(const p of room.players){
     if(!p.isBot && p.socketId) io.to(p.socketId).emit('state',room.publicState(p.socketId));
