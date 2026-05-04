@@ -97,9 +97,9 @@
         <div class="g-log-line g-log-line--1" id="log-line-1">—</div>
         <div class="g-log-line g-log-line--2" id="log-line-2"></div>
       </div>
-      <!-- Кнопка колоды теперь показывает твою рубашку! -->
+      <!-- ВЕРНУЛИ КЛАССИЧЕСКУЮ КНОПКУ КОЛОДЫ -->
       <button class="g-deck-btn" id="deck-btn">
-        <div id="deck-back-preview" style="width:24px;height:42px;border-radius:3px;background-size:cover;background-position:center;border:1px solid var(--gold-b);margin-bottom:2px;"></div>
+        <span class="deck-icon" id="deck-icon-svg" style="font-size: 24px; line-height: 1;">🂠</span>
         <span class="deck-count" id="deck-count-badge">16</span>
       </button>
     </div>
@@ -114,7 +114,7 @@
     </div>
   </div>
 
-  <!-- СЛОЙ ДЛЯ VFX -->
+  <!-- СЛОЙ ДЛЯ VFX (ПОВЕРХ ВСЕГО) -->
   <div id="vfx-layer"></div>
 
   <!-- ОВЕРЛЕИ -->
@@ -171,7 +171,8 @@
     </div>
   </div>
 
-  <div class="overlay peek-overlay" id="peek-overlay">
+  <!-- ОВЕРЛЕЙ ЖУРНАЛИСТА -->
+  <div class="overlay peek-overlay" id="peek-overlay" style="z-index: 200;">
     <div class="am-inner">
       <button class="btn-close-cross" id="peek-close">&times;</button>
       <div class="am-title" id="peek-title">У соперника</div>
