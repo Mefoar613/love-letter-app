@@ -1,5 +1,5 @@
 // =====================================================================
-// Тёмная Дуэль — Frontend v8 (Smooth Animations, Real Badges, Own Back)
+// Тёмная Дуэль — Frontend v9 (AAA Animations, Perfect Sequencing)
 // =====================================================================
 const tg = window.Telegram?.WebApp;
 if(tg){tg.ready();tg.expand();tg.setHeaderColor?.('#08050f');tg.setBackgroundColor?.('#08050f');}
@@ -155,9 +155,10 @@ function renderBacks(){
   });
 }
 
-// ═══ ИГРОВОЕ СОСТОЯНИЕ (ОЧЕРЕДЬ И ПАУЗЫ) ═══
+// ═══ ИГРОВОЕ СОСТОЯНИЕ (ОЧЕРЕДЬ, 2-ФАЗНАЯ АНИМАЦИЯ) ═══
 let lastState=null, pendingCard=null, pendingCardElement=null;
 let stateQueue=[], busyAnimating=false, prevOppDiscardLen=0;
+let activeRevealCard = null; // Карта, которая висит в центре!
 
 function isOverlayOpen() {
   return document.querySelectorAll('.overlay.show:not(#round-over):not(#game-over)').length > 0;
@@ -181,78 +182,121 @@ function handleNewState(s) {
 
 function processState(s) {
   const isFirst = !lastState;
-  const oppPlayed = !isFirst && s.opponent && lastState.opponent && (s.opponent.discard.length > prevOppDiscardLen);
-
-  // ПОКАЗЫВАЕМ ТВОЮ РУБАШКУ В КОЛОДЕ
-  document.getElementById('deck-back-preview').style.backgroundImage = `url('assets/backs/${mySelectedBack}.png')`;
+  
+  // ИСПРАВЛЕНИЕ ДВОЙНОГО СБРОСА: Враг сыграл карту ТОЛЬКО если ход перешел от него к нам!
+  const oppPlayed = !isFirst && (lastState.isMyTurn === false) && s.opponent && (s.opponent.discard.length > prevOppDiscardLen);
 
   if (oppPlayed) {
     const playedCard = s.opponent.discard[s.opponent.discard.length - 1];
     busyAnimating = true;
     updateLogStrip(s.log);
-    
-    // ИСПРАВЛЕНО: ПЛАВНЫЙ БРОСОК ЧЕРЕЗ JS
-    animateOppReveal(playedCard, s.opponent.back || 'back', () => {
-      lastState = s;
-      prevOppDiscardLen = s.opponent?.discard?.length || 0;
-      renderState(s);
-      busyAnimating = false;
-      flushQueue();
+
+    // ФАЗА 1: Карта летит в центр и переворачивается
+    animateOppRevealPart1(playedCard, s.opponent.back || 'back', () => {
+      
+      // ПРОВЕРЯЕМ, ЕСТЬ ЛИ ЭФФЕКТ (VFX) В ОЧЕРЕДИ
+      const vfxIndex = stateQueue.findIndex(q => q.type === 'vfx');
+      if (vfxIndex >= 0) {
+        const vfx = stateQueue.splice(vfxIndex, 1)[0];
+        // Если есть, запускаем VFX, и только после него завершаем анимацию
+        handleVFX(vfx.payload, () => {
+          animateOppRevealPart2(() => finishProcessState(s));
+        });
+      } else {
+        // Если VFX нет, просто ждем 1.2 сек и убираем в сброс
+        setTimeout(() => {
+          animateOppRevealPart2(() => finishProcessState(s));
+        }, 1200);
+      }
     });
+
   } else {
+    // Обычная обработка (без анимации хода врага)
     if (lastState && lastState.me && !lastState.me.eliminated && s.me && s.me.eliminated) {
       shakeScreen(); 
     }
-    lastState = s;
-    prevOppDiscardLen = s.opponent?.discard?.length || 0;
-    renderState(s);
-    flushQueue();
+    finishProcessState(s);
   }
 }
 
-// ПЛАВНАЯ АНИМАЦИЯ БРОСКА
-function animateOppReveal(playedCard, backName, cb) {
-  const zone = document.getElementById('opp-card-zone');
-  const ex = zone.querySelector('.card');
-  if (!ex || !playedCard) { if (ex) zone.innerHTML = ''; cb(); return; }
+function finishProcessState(s) {
+  lastState = s;
+  prevOppDiscardLen = s.opponent?.discard?.length || 0;
+  renderState(s);
+  busyAnimating = false;
+  flushQueue();
+}
 
-  ex.classList.remove('opp-turn-glow');
+// ─── ДВУХФАЗНАЯ АНИМАЦИЯ ───
+function animateOppRevealPart1(playedCard, backName, cb) {
+  const layer = document.getElementById('vfx-layer');
+  layer.innerHTML = '';
   
-  // Добавляем плавный transition к карте
-  ex.style.transition = 'transform 0.7s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.5s ease';
+  // Создаем фейковую карту поверх всего
+  const ex = document.createElement('div');
+  ex.className = 'card card--big opp-center-facedown';
+  ex.innerHTML = `
+    <div class="card-back"><img src="assets/backs/${backName}.png" onerror="this.src='assets/cards/back.png'"></div>
+    <div class="card-face"><img src="assets/cards/${playedCard.value}.png" onerror="this.style.display='none'"></div>
+  `;
   
-  // 1. Карта мягко подлетает в центр
-  ex.style.transform = 'translateY(16vh) scale(1.6)';
-  ex.style.zIndex = '50';
+  // Начальная позиция (сверху)
+  ex.style.position = 'absolute';
+  ex.style.top = '-10%';
+  ex.style.transform = 'scale(0.5)';
+  ex.style.transition = 'all 0.8s cubic-bezier(0.25, 1, 0.5, 1)';
+  layer.appendChild(ex);
+
+  // Форсируем рендер
+  void ex.offsetWidth;
+
+  // Летим в центр и увеличиваемся в 2.5 раза
+  ex.style.top = '50%';
+  ex.style.transform = 'translateY(-50%) scale(2.5)';
   playSound('card');
 
-  // 2. Переворот
   setTimeout(() => {
-    const face = ex.querySelector('.card-face');
-    face.innerHTML = `<img src="assets/cards/${playedCard.value}.png" onerror="this.style.display='none'">`;
+    // Переворачиваем!
+    ex.classList.remove('opp-center-facedown');
     ex.classList.add('face-up');
     playSound('card');
+    
+    activeRevealCard = ex; // Сохраняем, чтобы VFX мог с ней работать
+    setTimeout(cb, 600); // Даем время перевернуться
+  }, 800);
+}
 
-    // 3. Пауза 1.5 секунды, чтобы ты увидел карту
-    setTimeout(() => {
-      // 4. Плавно улетает в сброс
-      ex.style.transform = 'translate(-35vw, 35vh) scale(0.4) rotate(-25deg)';
-      ex.style.opacity = '0';
-      setTimeout(() => { zone.innerHTML = ''; cb(); }, 600);
-    }, 1500); 
-
-  }, 700); 
+function animateOppRevealPart2(cb) {
+  if (!activeRevealCard) return cb();
+  
+  // Летим в сброс!
+  activeRevealCard.style.top = '120%'; // Улетает вниз
+  activeRevealCard.style.transform = 'translate(-35vw, 0) scale(0.4) rotate(-25deg)';
+  activeRevealCard.style.opacity = '0';
+  
+  setTimeout(() => {
+    if (activeRevealCard && activeRevealCard.parentNode) {
+      activeRevealCard.parentNode.removeChild(activeRevealCard);
+    }
+    activeRevealCard = null;
+    cb();
+  }, 800);
 }
 
 // ─── VFX ОБРАБОТЧИК (Анимации экшена) ───
-function handleVFX(data) {
-  busyAnimating = true;
+// Добавили callback, чтобы сообщать, когда эффект закончился
+function handleVFX(data, callback = () => {}) {
+  const isDirect = !busyAnimating; 
+  if (isDirect) busyAnimating = true;
+
   const layer = document.getElementById('vfx-layer');
-  layer.innerHTML = ''; 
   let animDuration = 2000;
 
   if (data.type === 'baron') {
     playSound('card');
+    // Прячем центральную карту, так как у нас своя анимация столкновения
+    if (activeRevealCard) activeRevealCard.style.opacity = '0';
+
     const c1 = document.createElement('div'); c1.className = 'vfx-card vfx-clash-left';
     c1.innerHTML = `<img src="assets/cards/${data.p1Card}.png">`;
     const c2 = document.createElement('div'); c2.className = 'vfx-card vfx-clash-right';
@@ -264,7 +308,7 @@ function handleVFX(data) {
       if (data.winnerId === data.p1Id) c2.classList.add('vfx-clash-loser');
       else if (data.winnerId === data.p2Id) c1.classList.add('vfx-clash-loser');
     }, 1000);
-    animDuration = 2000;
+    animDuration = 2500;
   } 
   else if (data.type === 'burn') {
     playSound('burn'); triggerVibe('medium');
@@ -275,26 +319,25 @@ function handleVFX(data) {
   }
   else if (data.type === 'detective') {
     playSound('card');
+    
+    // Создаем группу рядом с картой
     const g = document.createElement('div');
     g.className = 'vfx-detective-group';
-    g.innerHTML = `
-      <div class="vfx-detective-text">Проверяет: ${CARDS[data.guess].name}</div>
-      <div class="vfx-card" style="position:relative;"><img src="assets/cards/1.png"></div>
-    `;
+    // Если карта врага в центре, смещаем текст чуть выше нее
+    g.style.top = activeRevealCard ? '15%' : '50%';
+    
+    g.innerHTML = `<div class="vfx-detective-text">Проверяет: ${CARDS[data.guess].name}</div>`;
     layer.appendChild(g);
 
     if (data.hit) {
-      // Если попал, через секунду появляется перевернутая карта противника
       setTimeout(() => {
         g.innerHTML += `<div class="vfx-card vfx-flip-target" style="position:relative;"><img src="assets/cards/${data.targetCard}.png"></div>`;
         playSound('clash'); triggerVibe('heavy');
       }, 1200);
       animDuration = 3500;
     } else {
-      // Если промазал, плашка улетает
       setTimeout(() => {
-        g.style.opacity = '0';
-        g.style.transform = 'translateY(-100px)';
+        g.style.opacity = '0'; g.style.transform = 'translateY(-100px)';
         playSound('click');
       }, 1500);
       animDuration = 2000;
@@ -302,25 +345,26 @@ function handleVFX(data) {
   }
   else if (data.type === 'journalist') {
     playSound('magic');
-    const g = document.createElement('div');
-    g.className = 'vfx-detective-group';
-    g.innerHTML = `
-      <div class="vfx-detective-text" style="font-size:24px;">👀 Подглядывает...</div>
-      <div class="vfx-card" style="position:relative;"><img src="assets/cards/2.png"></div>
-    `;
-    layer.appendChild(g);
-    
-    setTimeout(() => {
-        g.style.opacity = '0';
-        g.style.transform = 'translateY(-100px)';
-    }, 2000);
-    animDuration = 2500;
+    const eyes = document.createElement('div');
+    eyes.className = 'vfx-eyes';
+    eyes.innerHTML = '👀';
+    layer.appendChild(eyes);
+    animDuration = 2000;
   }
 
   setTimeout(() => {
-    layer.innerHTML = '';
-    busyAnimating = false;
-    flushQueue();
+    // Убираем только добавленные VFX (не трогаем activeRevealCard)
+    Array.from(layer.children).forEach(child => {
+        if (child !== activeRevealCard) layer.removeChild(child);
+    });
+    // Возвращаем видимость карте, если прятали
+    if (activeRevealCard) activeRevealCard.style.opacity = '1';
+
+    if (isDirect) {
+      busyAnimating = false;
+      flushQueue();
+    }
+    callback(); // Сообщаем `processState`, что эффект окончен!
   }, animDuration);
 }
 
@@ -432,7 +476,7 @@ function onPlay(card,cardEl){
   }
 }
 
-// ДЕТЕКТИВ: ЗНАЧКИ ВНУТРИ КНОПКИ (ИСПРАВЛЕНО!)
+// ДЕТЕКТИВ: ЗНАЧКИ В УГЛУ!
 function openGuessModal(card){
   const el=document.getElementById('action-modal'),g=document.getElementById('action-options');g.innerHTML='';
   for(let v=0;v<=9;v++){
@@ -440,8 +484,9 @@ function openGuessModal(card){
     const o=document.createElement('div');o.className='am-opt';
     const seen=(lastState?.me?.seenCounts||{})[v]||0;
     
+    // АБСОЛЮТНАЯ ПОЗИЦИЯ ДЛЯ БЕЙДЖА
     o.innerHTML=`
-      <div class="card-seen-badge" style="top:-4px;right:-4px;font-size:10px;padding:3px 5px;">${seen}/${CARDS[v].total}</div>
+      <div style="position:absolute; top:-6px; right:-6px; background:#000; color:var(--gold-b); border:1px solid var(--gold); border-radius:10px; font-size:10px; padding:2px 6px; font-weight:bold; box-shadow:0 2px 4px rgba(0,0,0,0.8);">${seen}/${CARDS[v].total}</div>
       <span class="num">${v}</span>${CARDS[v].name}
     `;
     o.addEventListener('click',()=>{
@@ -547,4 +592,4 @@ document.getElementById('action-cancel').addEventListener('click', () => { pendi
 document.getElementById('target-cancel').addEventListener('click', () => { pendingCard=null; document.getElementById('target-modal').classList.remove('show'); flushQueue(); });
 document.getElementById('peek-close').addEventListener('click', () => { document.getElementById('peek-overlay').classList.remove('show'); flushQueue(); });
 
-function resetGameState(){ lastState=null; pendingCard=null; pendingCardElement=null; stateQueue=[]; busyAnimating=false; document.getElementById('vfx-layer').innerHTML=''; }
+function resetGameState(){ lastState=null; pendingCard=null; pendingCardElement=null; stateQueue=[]; busyAnimating=false; document.getElementById('vfx-layer').innerHTML=''; activeRevealCard=null; }
