@@ -1,5 +1,5 @@
 // =====================================================================
-// Тёмная Дуэль — Frontend v3.6 (Фикс ссылки + Тряска + Прозрачный финал)
+// Тёмная Дуэль — Frontend v3.7 (Фикс Лобби, Быстрой игры и Оверлеев)
 // =====================================================================
 const tg = window.Telegram?.WebApp;
 if (tg) { 
@@ -9,7 +9,6 @@ if (tg) {
   tg.setBackgroundColor?.('#08050f'); 
 }
 
-// РЕАЛЬНАЯ ССЫЛКА НА ТВОЕГО БОТА
 const BOT_LINK = "https://t.me/PumpHuntRealBot/POGNALI";
 
 const tgUser = tg?.initDataUnsafe?.user;
@@ -45,7 +44,7 @@ function triggerVibe(type = 'medium') {
 function shakeScreen() {
   const gameEl = document.getElementById('game');
   gameEl.classList.remove('shake-screen');
-  void gameEl.offsetWidth; // Магия для перезапуска анимации
+  void gameEl.offsetWidth; 
   gameEl.classList.add('shake-screen');
   triggerVibe('heavy');
 }
@@ -81,7 +80,7 @@ function connectSocket() {
   socket.on('error_msg', m => showToast(m));
 }
 
-// ИНВАЙТ С РЕАЛЬНОЙ ССЫЛКОЙ
+// --- Лобби и Приглашения ---
 function shareInvite(roomId) {
   const link = `${BOT_LINK}?startapp=${roomId}`;
   if (tg?.openTelegramLink) {
@@ -93,7 +92,9 @@ function shareInvite(roomId) {
 }
 
 document.getElementById('btn-invite').addEventListener('click', () => enterGame('r'+Math.random().toString(36).slice(2,8), true));
-document.getElementById('btn-quick').addEventListener('click', () => enterGame('quick', false));
+// Фикс быстрой игры: генерируем комнату, которая меняется каждые 30 секунд
+document.getElementById('btn-quick').addEventListener('click', () => enterGame('q'+Math.floor(Date.now()/30000), false));
+
 function enterGame(roomId, isInvite) {
   connectSocket();
   socket.emit('join', { roomId, user:ME });
@@ -101,6 +102,27 @@ function enterGame(roomId, isInvite) {
   document.getElementById('lobby-room-id').textContent = roomId;
   if (isInvite) setTimeout(() => shareInvite(roomId), 300);
 }
+
+// Фикс отрисовки лобби
+function renderLobbyPlayers(players) {
+  const c = document.getElementById('lobby-players');
+  c.innerHTML = '';
+  for (let i=0; i<2; i++) {
+    const p = players[i];
+    const el = document.createElement('div');
+    el.className = 'lobby-player';
+    if (p) {
+      el.innerHTML = `<div class="lobby-player-avatar"${p.avatar ? ` style="background-image:url('${p.avatar}')"` : ''}></div><div class="lobby-player-name">${esc(p.name)}</div>`;
+    } else {
+      el.style.opacity = '.4';
+      el.innerHTML = `<div class="lobby-player-avatar" style="border-style:dashed"></div><div class="lobby-player-name">ожидание</div>`;
+    }
+    c.appendChild(el);
+  }
+}
+
+document.getElementById('lobby-share').addEventListener('click', () => { if(currentRoomId) shareInvite(currentRoomId); });
+document.getElementById('lobby-cancel').addEventListener('click', () => window.location.reload());
 
 // --- Рендеринг игры ---
 let lastState = null;
@@ -114,9 +136,9 @@ function handleNewState(s) {
 
 function processState(s) {
   const isFirst = !lastState;
-  // Проверка: выбыл ли я в этом стейте?
+  // Тряска при вылете
   if (lastState && lastState.me && !lastState.me.eliminated && s.me && s.me.eliminated) {
-    shakeScreen(); // Трясем экран при вылете!
+    shakeScreen(); 
   }
   
   lastState = s;
@@ -124,32 +146,26 @@ function processState(s) {
 }
 
 function renderState(s, isFirst) {
-  // Аватары и имена
   document.getElementById('me-name').textContent = s.me.name;
   document.getElementById('opp-name').textContent = s.opponent.name;
   if (s.me.avatar) document.getElementById('me-avatar').style.backgroundImage = `url(${s.me.avatar})`;
   if (s.opponent.avatar) document.getElementById('opp-avatar').style.backgroundImage = `url(${s.opponent.avatar})`;
 
-  // Жетончики
   renderTokens('me-tokens', s.me.tokens);
   renderTokens('opp-tokens', s.opponent.tokens);
 
-  // Статусы
   document.getElementById('me-status').textContent = s.isMyTurn ? 'твой ход' : (s.me.protected ? 'защита' : '');
   document.getElementById('opp-status').textContent = !s.isMyTurn ? 'ходит...' : (s.opponent.protected ? 'защита' : '');
 
-  // Карты
   renderMyHand(s);
   renderOpponentHand(s);
   renderDiscard('me-discard', s.me.discard);
   renderDiscard('opp-discard', s.opponent.discard);
   renderExcluded(s.excludedCards);
 
-  // Лог и колода
   document.getElementById('deck-count-badge').textContent = s.deckCount;
   updateLogStrip(s.log);
 
-  // Финалы
   if (s.gameOver) showGameOver(s.gameOver);
   else if (s.roundOver) showRoundOver(s.roundOver);
   else {
@@ -177,7 +193,6 @@ function renderMyHand(s) {
     const card = makeCard(c, true, 'card--big');
     if (s.isMyTurn) card.classList.add('my-turn-glow');
     
-    // Бейдж "Видено"
     const seen = s.me.seenCounts[c.value] || 0;
     const badge = document.createElement('div');
     badge.className = 'card-seen-badge';
@@ -211,8 +226,8 @@ function makeCard(card, faceUp, sizeClass) {
   const el = document.createElement('div');
   el.className = `card ${sizeClass} ${faceUp ? 'face-up' : ''}`;
   el.innerHTML = `
-    <div class="card-back"><img src="assets/cards/back.png"></div>
-    <div class="card-face">${card ? `<img src="assets/cards/${card.value}.png">` : ''}</div>
+    <div class="card-back"><img src="assets/cards/back.png" onerror="this.style.display='none'"></div>
+    <div class="card-face">${card ? `<img src="assets/cards/${card.value}.png" onerror="this.style.display='none'">` : ''}</div>
   `;
   return el;
 }
@@ -286,7 +301,7 @@ function showGameOver(go) {
   overlay.classList.add('show');
 }
 
-// --- Помогаторы ---
+// --- Помогаторы и Оверлеи ---
 function updateLogStrip(log) {
   const l1 = document.getElementById('log-line-1');
   const l2 = document.getElementById('log-line-2');
@@ -294,6 +309,29 @@ function updateLogStrip(log) {
   l1.textContent = last[1] || '—';
   l2.textContent = last[0] || '';
 }
+
+document.getElementById('log-strip').addEventListener('click', () => {
+  if (!lastState) return;
+  const list = document.getElementById('lo-list'); list.innerHTML='';
+  [...(lastState.log||[])].reverse().forEach(line => {
+    const d=document.createElement('div'); d.className='lo-entry'; d.textContent=line; list.appendChild(d);
+  });
+  document.getElementById('log-overlay').classList.add('show');
+});
+
+document.getElementById('deck-btn').addEventListener('click', e => {
+  e.stopPropagation();
+  const grid=document.getElementById('do-grid'); grid.innerHTML='';
+  for (let v=0;v<=9;v++) {
+    const def=CARDS[v], row=document.createElement('div'); row.className='do-row';
+    const mini=document.createElement('div'); mini.className='do-mini';
+    mini.innerHTML=`<img src="assets/cards/${v}.png" onerror="this.style.display='none'">`;
+    const info=document.createElement('div'); info.className='do-info';
+    info.innerHTML=`<div class="do-name">${def.name}</div><div class="do-cnt">${def.total}</div>`;
+    row.appendChild(mini); row.appendChild(info); grid.appendChild(row);
+  }
+  document.getElementById('deck-overlay').classList.add('show');
+});
 
 function renderDiscard(id, cards) {
   const el = document.getElementById(id);
@@ -317,7 +355,7 @@ function renderExcluded(cards) {
 
 function openZoom(c) {
   const modal = document.getElementById('card-zoom');
-  document.getElementById('cz-card-img').innerHTML = `<img src="assets/cards/${c.value}.png">`;
+  document.getElementById('cz-card-img').innerHTML = `<img src="assets/cards/${c.value}.png" onerror="this.style.display='none'">`;
   document.getElementById('cz-name').textContent = CARDS[c.value].name;
   document.getElementById('cz-desc').textContent = CARDS[c.value].desc;
   document.getElementById('cz-seen').textContent = `Карта №${c.value}`;
@@ -369,3 +407,5 @@ document.getElementById('btn-rematch').onclick = () => socket.emit('rematch');
 document.getElementById('btn-to-menu').onclick = () => window.location.reload();
 document.getElementById('action-cancel').onclick = () => document.getElementById('action-modal').classList.remove('show');
 document.getElementById('target-cancel').onclick = () => document.getElementById('target-modal').classList.remove('show');
+document.getElementById('log-overlay').onclick = () => document.getElementById('log-overlay').classList.remove('show');
+document.getElementById('deck-overlay').onclick = () => document.getElementById('deck-overlay').classList.remove('show');
