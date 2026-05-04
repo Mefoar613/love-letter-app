@@ -1,5 +1,5 @@
 /* ===================================================================
-   Тёмная Дуэль — стили v3.5 (Фикс кропинга)
+   Тёмная Дуэль — стили v3.6 (Прозрачный баннер конца раунда + Тряска)
    =================================================================== */
 :root {
   --bg:    #08050f;
@@ -35,6 +35,14 @@ button { font-family:inherit; border:none; cursor:pointer; color:inherit; backgr
 
 .screen { position:fixed; inset:0; display:none; flex-direction:column; overflow:hidden; }
 .screen.active { display:flex; }
+
+/* ─── АНИМАЦИЯ ТРЯСКИ ПРИ ПОРАЖЕНИИ ─── */
+.shake-screen { animation: screenShake 0.4s cubic-bezier(.36,.07,.19,.97) both; }
+@keyframes screenShake {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  10%, 30%, 50%, 70%, 90% { transform: translate3d(-6px, 0, 0); }
+  20%, 40%, 60%, 80% { transform: translate3d(6px, 0, 0); }
+}
 
 #intro { background:#000; cursor:pointer; }
 .intro-layer { position:absolute; inset:0; opacity:0; transform:scale(1.04); transition:opacity .8s ease, transform .8s ease; }
@@ -126,7 +134,6 @@ button { font-family:inherit; border:none; cursor:pointer; color:inherit; backgr
 
 .g-card-center { flex:1; display:flex; align-items:center; justify-content:center; min-height:0; padding:6px 0; position:relative; }
 
-/* ─── ИДЕАЛЬНЫЙ CONTAIN ДЛЯ ВСЕХ КАРТ ─── */
 .card { border-radius:8px; position:relative; flex-shrink:0; transition:transform .22s ease, box-shadow .22s ease; }
 .card--big { width:var(--card-w); height:var(--card-h); }
 .card--opp { width:calc(var(--card-w)*.92); height:calc(var(--card-h)*.92); }
@@ -135,19 +142,16 @@ button { font-family:inherit; border:none; cursor:pointer; color:inherit; backgr
 .card--exc { width:30px; height:53px; }
 
 .card-face, .card-back { position:absolute; inset:0; border-radius:8px; overflow:hidden; border:1px solid rgba(201,150,58,.38); box-shadow:0 4px 14px rgba(0,0,0,.6); transition:opacity .35s ease; background:var(--bg-1); }
-/* Лицевые карты и зум вписываем аккуратно (contain) */
+
 .card-face img, .cz-card img, .do-mini img {
   width:100%; height:100%; 
   object-fit:contain !important; 
   display:block; 
 }
-
-/* А рубашку растягиваем на всю площадь (cover), чтобы спрятать фон и звезду! */
 .card-back img { 
   position:absolute; inset:0; width:100%; height:100%; 
   object-fit:cover !important; 
 }
-
 
 .card-back { background:radial-gradient(ellipse at 40% 35%, #321a4a, #110b1e); display:flex; align-items:center; justify-content:center; }
 .card-back::before { content:'✦'; font-size:30px; color:var(--gold); text-shadow:0 0 14px rgba(201,150,58,.7); position:relative; z-index:0; }
@@ -182,6 +186,7 @@ button { font-family:inherit; border:none; cursor:pointer; color:inherit; backgr
 .card--sm.discard-entry { animation:discardEntry .4s cubic-bezier(.2,1.3,.5,1) backwards; }
 @keyframes discardEntry { from { transform:translate(-25px,-30px) scale(1.2) rotate(-8deg); opacity:0; } to { transform:translate(0,0) scale(1) rotate(0deg); opacity:1; } }
 
+/* БАЗОВЫЙ ОВЕРЛЕЙ (БЛОКИРУЮЩИЙ) */
 .overlay { position:fixed; inset:0; z-index:50; display:none; align-items:center; justify-content:center; background:rgba(8,5,15,.88); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px); padding:18px; }
 .overlay.show { display:flex; animation:fadeIn .22s ease; }
 @keyframes fadeIn { from{opacity:0;transform:scale(.96)} to{opacity:1;transform:scale(1)} }
@@ -202,6 +207,8 @@ button { font-family:inherit; border:none; cursor:pointer; color:inherit; backgr
 .lo-list { flex:1; overflow-y:auto; display:flex; flex-direction:column-reverse; gap:5px; scrollbar-width:thin; scrollbar-color:rgba(201,150,58,.18) transparent; }
 .lo-entry { font-family:'Cormorant Garamond',serif; font-size:14px; font-style:italic; color:var(--ink-d); padding:3px 0; border-bottom:1px solid rgba(255,255,255,.05); }
 .lo-entry:first-child { color:var(--gold-b); }
+/* Стиль для отбивки "РАУНД" в логах */
+.lo-entry:contains("— РАУНД") { color: var(--gold-b); font-weight: bold; text-align: center; border: none; padding-top: 10px; }
 
 .deck-overlay { flex-direction:column; cursor:pointer; }
 .do-inner { max-width:340px; width:100%; max-height:80vh; overflow-y:auto; background:rgba(18,12,30,.97); border:1px solid rgba(201,150,58,.22); border-radius:8px; padding:16px; display:flex; flex-direction:column; gap:10px; }
@@ -228,19 +235,31 @@ button { font-family:inherit; border:none; cursor:pointer; color:inherit; backgr
 .chancellor-choose-label { font-size:10px; letter-spacing:.2em; text-transform:uppercase; color:var(--gold); }
 
 .peek-card-wrap { display:flex; justify-content:center; padding:8px 0; }
-.peek-card-wrap .card--big { width:130px; height:231px; } /* Пропорция 9:16 */
+.peek-card-wrap .card--big { width:130px; height:231px; } 
 .peek-info { text-align: center; margin-top: 12px; display: flex; flex-direction: column; align-items: center; gap: 4px; }
 
-.round-over,.game-over { flex-direction:column; }
-.ro-inner { max-width:310px; width:100%; text-align:center; background:rgba(18,12,30,.98); border:1px solid rgba(201,150,58,.28); border-radius:10px; padding:26px 20px; display:flex; flex-direction:column; gap:8px; align-items:center; box-shadow:0 18px 52px rgba(0,0,0,.75); }
-.ro-glyph { font-size:52px; color:var(--gold); filter:drop-shadow(0 0 24px rgba(201,150,58,.65)); }
-.game-over .ro-glyph { color:var(--red-b); }
-.ro-title { font-family:'Playfair Display',serif; font-size:30px; font-weight:700; margin:0; }
-.ro-sub { font-size:13.5px; color:var(--ink-d); font-style:italic; }
+/* ─── ROUND OVER (ПРОЗРАЧНЫЙ, НЕ ПЕРЕКРЫВАЕТ СТОЛ) ─── */
+.overlay.round-over { 
+  background: transparent; 
+  backdrop-filter: none; 
+  -webkit-backdrop-filter: none; 
+  pointer-events: none; /* Пропускает клики насквозь */
+  align-items: flex-start;
+  padding-top: 15vh; /* Показываем в верхней части экрана */
+}
+.overlay.game-over { flex-direction:column; } /* Game over блокирует как обычно */
+
+.ro-inner { max-width:310px; width:100%; text-align:center; background:rgba(18,12,30,.96); border:1px solid var(--gold); border-radius:10px; padding:18px 20px; display:flex; flex-direction:column; gap:6px; align-items:center; box-shadow:0 18px 52px rgba(0,0,0,.85); }
+.ro-inner.loss { border-color: var(--red-b); box-shadow: 0 10px 40px rgba(140,30,42,.4); }
+
+.ro-glyph { font-size:38px; line-height:1; color:var(--gold); filter:drop-shadow(0 0 24px rgba(201,150,58,.65)); }
+.game-over .ro-glyph, .ro-inner.loss .ro-glyph { color:var(--red-b); filter:drop-shadow(0 0 24px rgba(140,30,42,.65)); }
+.ro-title { font-family:'Playfair Display',serif; font-size:24px; font-weight:700; margin:0; }
+.ro-sub { font-size:13.5px; color:var(--ink-d); font-style:italic; margin-bottom: 4px; }
 .ro-tokens-row { display:flex; gap:5px; align-items:center; font-size:13px; color:var(--ink-d); flex-wrap:wrap; justify-content:center; }
 .ro-tokens-row strong { color:var(--gold-b); font-family:'Playfair Display',serif; font-size:18px; }
-.ro-auto { font-size:10px; letter-spacing:.22em; text-transform:uppercase; color:var(--ink-m); }
-.result-actions { display:flex; flex-direction:column; gap:9px; width:100%; }
+.ro-auto { font-size:10px; letter-spacing:.22em; text-transform:uppercase; color:var(--ink-m); margin-top:4px;}
+.result-actions { display:flex; flex-direction:column; gap:9px; width:100%; margin-top: 8px;}
 
 .toast { position:fixed; bottom:calc(75px + env(safe-area-inset-bottom)); left:50%; transform:translateX(-50%) translateY(14px); background:rgba(8,5,15,.96); border:1px solid var(--red); color:var(--ink); padding:10px 18px; border-radius:4px; font-size:13px; z-index:200; opacity:0; pointer-events:none; transition:opacity .2s,transform .2s; max-width:82%; text-align:center; }
 .toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
