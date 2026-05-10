@@ -1,5 +1,5 @@
 // =====================================================================
-// Тёмная Дуэль — Frontend v12 (Без заставки, мгновенный старт)
+// Тёмная Дуэль — Frontend v12 (Мгновенный старт + Полное Обучение)
 // =====================================================================
 const tg=window.Telegram?.WebApp;
 if(tg){tg.ready();tg.expand();tg.setHeaderColor?.('#08050f');tg.setBackgroundColor?.('#08050f');}
@@ -42,28 +42,29 @@ if(type==='success'){o.type='sine';o.frequency.setValueAtTime(523,n);o.frequency
 }catch(e){}}
 
 document.body.addEventListener('click',e=>{
-  startMusic(); // Музыка стартует по первому клику куда угодно
+  startMusic();
   if(e.target.closest('.btn,.am-opt,.g-deck-btn,.g-log-strip,.play-arrow,.chancellor-option,.lb-card,.back-option,.lc-slot,.btn-close-bottom,.do-row'))playSound('click');
 },true);
 
 function triggerVibe(t='medium'){if(tg?.HapticFeedback)tg.HapticFeedback.impactOccurred(t);}
 function shakeScreen(){const g=document.getElementById('game');g.classList.remove('shake-screen');void g.offsetWidth;g.classList.add('shake-screen');triggerVibe('heavy');playSound('clash');}
 
-// ─── ЭКРАНЫ (МГНОВЕННЫЙ СТАРТ) ───
+// ─── ЭКРАНЫ (МГНОВЕННЫЙ ЗАПУСК БЕЗ ЗАСТАВКИ) ───
 function showScreen(id){document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('active',s.id===id));}
 
-window.addEventListener('load',()=>{
-  // Убираем заставку нафиг
+document.addEventListener('DOMContentLoaded', ()=>{
+  // Жёстко выключаем чёрный экран заставки, даже если он есть в HTML
   const introEl = document.getElementById('intro');
-  if(introEl) introEl.classList.remove('active');
+  if(introEl) introEl.style.display = 'none';
   
-  // Сразу показываем меню
+  // Мгновенно показываем меню
   showScreen('menu');
   connectSocket();
   
-  const sp=tg?.initDataUnsafe?.start_param;
+  // Проверяем, пришел ли игрок по ссылке-приглашению
+  const sp = tg?.initDataUnsafe?.start_param;
   if(sp){
-    setTimeout(()=>{socket.emit('join_lobby',{lobbyId:sp,user:ME});showScreen('lobby');},500);
+    setTimeout(()=>{socket.emit('join_lobby',{lobbyId:sp,user:ME});showScreen('lobby');},200);
   }
 });
 
@@ -112,7 +113,7 @@ document.getElementById('btn-invite-friend').addEventListener('click',()=>{if(!c
 document.getElementById('backs-back').addEventListener('click',()=>showScreen('menu'));
 function renderBacks(){const grid=document.getElementById('backs-grid');grid.innerHTML='';AVAILABLE_BACKS.forEach(b=>{const opt=document.createElement('div');opt.className='back-option'+(b.id===mySelectedBack?' selected':'');opt.innerHTML=`<img src="assets/backs/${b.id}.png" onerror="this.src='assets/cards/back.png'"/><div class="back-option-name">${b.name}</div>`;opt.addEventListener('click',()=>{socket.emit('set_back',{userId:ME.id,backName:b.id});mySelectedBack=b.id;renderBacks();});grid.appendChild(opt);});}
 
-// ═══ ОБУЧЕНИЕ ═══
+// ═══ ТВОЁ ИДЕАЛЬНОЕ ОБУЧЕНИЕ ═══
 const TUTORIAL_STEPS=[
   {text:'Добро пожаловать в Тёмную Дуэль! Это карточная игра на логику, блеф и дедукцию. Давай я покажу тебе как играть.', show:[]},
   {text:'В колоде 21 карта с номиналами от 0 до 9. В начале раунда каждому игроку сдаётся по 1 карте. Ещё 1 карта откладывается втёмную.', show:[{v:1},{v:2},{v:3}]},
