@@ -1,5 +1,5 @@
 // =====================================================================
-// Тёмная Дуэль — Frontend v11 (Master Version)
+// Тёмная Дуэль — Frontend v11 (Идеальное Обучение + Фикс Запуска)
 // =====================================================================
 const tg=window.Telegram?.WebApp;
 if(tg){tg.ready();tg.expand();tg.setHeaderColor?.('#08050f');tg.setBackgroundColor?.('#08050f');}
@@ -30,8 +30,8 @@ const AVAILABLE_BACKS=[{id:'back',name:'Классика'},{id:'back_noir',name:
 let mySelectedBack='back';
 
 // ─── ЗВУК И ВИБРО ───
-const bgm=document.getElementById('bgm');bgm.volume=.38;
-let musicStarted=false;function startMusic(){if(musicStarted)return;musicStarted=true;bgm.play().catch(()=>{musicStarted=false});}
+const bgm=document.getElementById('bgm');if(bgm)bgm.volume=.38;
+let musicStarted=false;function startMusic(){if(musicStarted||!bgm)return;musicStarted=true;bgm.play().catch(()=>{musicStarted=false});}
 let audioCtx=null;
 function playSound(type='click'){try{if(!audioCtx)audioCtx=new(window.AudioContext||window.webkitAudioContext)();const n=audioCtx.currentTime,o=audioCtx.createOscillator(),g=audioCtx.createGain();o.connect(g);g.connect(audioCtx.destination);
 if(type==='click'){o.type='triangle';o.frequency.setValueAtTime(800,n);o.frequency.exponentialRampToValueAtTime(380,n+.07);g.gain.setValueAtTime(.13,n);g.gain.exponentialRampToValueAtTime(.001,n+.09);o.start(n);o.stop(n+.1);}
@@ -43,14 +43,33 @@ document.body.addEventListener('click',e=>{if(e.target.closest('.btn,.am-opt,.g-
 function triggerVibe(t='medium'){if(tg?.HapticFeedback)tg.HapticFeedback.impactOccurred(t);}
 function shakeScreen(){const g=document.getElementById('game');g.classList.remove('shake-screen');void g.offsetWidth;g.classList.add('shake-screen');triggerVibe('heavy');playSound('clash');}
 
-// ─── ЭКРАНЫ ───
+// ─── ЭКРАНЫ И ЗАСТАВКА ───
 function showScreen(id){document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('active',s.id===id));}
 
-// ─── ЗАСТАВКА ───
 let introStep=0;const introLayers=document.querySelectorAll('.intro-layer'),introHint=document.querySelector('.intro-hint');
-function advanceIntro(){startMusic();if(introStep<introLayers.length){introLayers[introStep].classList.add('show');introStep++;if(introStep===introLayers.length)introHint.textContent='тапни, чтобы войти';}else{document.getElementById('intro').removeEventListener('click',advanceIntro);setTimeout(()=>showScreen('menu'),220);}}
-window.addEventListener('load',()=>{advanceIntro();document.getElementById('intro').addEventListener('click',advanceIntro);connectSocket();
-  const sp=tg?.initDataUnsafe?.start_param;if(sp){document.getElementById('intro').classList.remove('active');showScreen('menu');setTimeout(()=>{socket.emit('join_lobby',{lobbyId:sp,user:ME});showScreen('lobby');},500);}});
+function advanceIntro(){
+  startMusic();
+  if(introStep<introLayers.length){
+    introLayers[introStep].classList.add('show');
+    introStep++;
+    if(introStep===introLayers.length && introHint) introHint.textContent='тапни, чтобы войти';
+  } else {
+    document.getElementById('intro').removeEventListener('click',advanceIntro);
+    setTimeout(()=>showScreen('menu'),100);
+  }
+}
+
+window.addEventListener('load',()=>{
+  advanceIntro(); // Первый запуск
+  document.getElementById('intro').addEventListener('click',advanceIntro);
+  connectSocket();
+  const sp=tg?.initDataUnsafe?.start_param;
+  if(sp){
+    document.getElementById('intro').classList.remove('active');
+    showScreen('menu');
+    setTimeout(()=>{socket.emit('join_lobby',{lobbyId:sp,user:ME});showScreen('lobby');},500);
+  }
+});
 
 // ─── СОКЕТЫ ───
 let socket=null,currentLobby=null;
@@ -97,12 +116,12 @@ document.getElementById('btn-invite-friend').addEventListener('click',()=>{if(!c
 document.getElementById('backs-back').addEventListener('click',()=>showScreen('menu'));
 function renderBacks(){const grid=document.getElementById('backs-grid');grid.innerHTML='';AVAILABLE_BACKS.forEach(b=>{const opt=document.createElement('div');opt.className='back-option'+(b.id===mySelectedBack?' selected':'');opt.innerHTML=`<img src="assets/backs/${b.id}.png" onerror="this.src='assets/cards/back.png'"/><div class="back-option-name">${b.name}</div>`;opt.addEventListener('click',()=>{socket.emit('set_back',{userId:ME.id,backName:b.id});mySelectedBack=b.id;renderBacks();});grid.appendChild(opt);});}
 
-// ═══ ТВОЁ ОБУЧЕНИЕ (13 ШАГОВ) ═══
+// ═══ ОБУЧЕНИЕ ═══
 const TUTORIAL_STEPS=[
   {text:'Добро пожаловать в Тёмную Дуэль! Это карточная игра на логику, блеф и дедукцию. Давай я покажу тебе как играть.', show:[]},
-  {text:'В колоде 21 карта с номиналами от 0 до 9. В начале раунда каждому игроку сдаётся по 1 карте. Ещё 1 карта откладывается втёмную, а 3 — открытыми (для игры вдвоём).', show:[{v:1},{v:2},{v:3}]},
-  {text:'На своём ходу ты берёшь 1 карту из колоды (она приходит автоматически). Теперь у тебя 2 карты — выбери одну и сыграй её.', cards:'hand', highlight:'arrow', show:[{v:1, glow:true},{v:6}]},
-  {text:'У каждой карты есть свой эффект. Тапни по карте, чтобы узнать, что она делает. А стрелка сверху — это кнопка «Сыграть».', show:[{v:1, highlight:'arrow'}]},
+  {text:'В колоде 21 карта с номиналами от 0 до 9. В начале раунда каждому игроку сдаётся по 1 карте. Ещё 1 карта откладывается втёмную.', show:[{v:1},{v:2},{v:3}]},
+  {text:'На своём ходу ты берёшь 1 карту из колоды (автоматически). Теперь у тебя 2 карты — выбери одну и сыграй её.', cards:'hand', highlight:'arrow', show:[{v:1, glow:true},{v:6}]},
+  {text:'У каждой карты есть свой эффект. Тапни по карте, чтобы узнать, что она делает. Стрелка сверху — это кнопка «Сыграть».', show:[{v:1, highlight:'arrow'}]},
   {text:'Карта 1 — Детектив. Самая частая карта (6 штук). Назови номинал карты соперника. Угадал? Соперник выбывает!', show:[{v:1, glow:true}]},
   {text:'Карта 3 — Громила. Сравниваете карты с соперником. У кого номинал ниже — тот выбывает. Опасная штука!', show:[{v:3, glow:true}, {v:'back'}]},
   {text:'Карта 4 — Продажный коп. Защищает тебя до следующего хода. Никакие эффекты на тебя не действуют.', show:[{v:4, glow:true}]},
@@ -110,7 +129,7 @@ const TUTORIAL_STEPS=[
   {text:'Карта 8 — Роковая женщина. Если у тебя на руке одновременно 8 и (5 или 7) — обязан сыграть восьмёрку.', show:[{v:8, glow:true}, {v:5}]},
   {text:'Раунд заканчивается когда: все кроме одного выбыли, или кончилась колода (побеждает тот, у кого номинал карты выше).', show:[{v:2}, {v:7}]},
   {text:'Побеждает тот, кто первый наберёт нужное число жетонов: 6 для двоих, 5 для троих, 4 для четверых.', show:[]},
-  {text:'Счётчик «Видено X/Y» на карте показывает сколько карт этого типа ты уже видел. Используй эту информацию для блефа и дедукции!', show:[{v:1, badge:'2/6'}]},
+  {text:'Счётчик «Видено X/Y» на карте показывает сколько карт этого типа ты уже видел. Используй эту информацию для дедукции!', show:[{v:1, badge:'2/6'}]},
   {text:'Ты готов! Жми «Играть» в меню, создай лобби, добавь бота или пригласи друга. Удачи в дуэли! 🎴', show:[]},
 ];
 
@@ -275,4 +294,4 @@ document.getElementById('action-cancel').onclick=()=>document.getElementById('ac
 document.getElementById('target-cancel').onclick=()=>document.getElementById('target-modal').classList.remove('show');
 document.getElementById('peek-close').onclick=()=>document.getElementById('peek-overlay').classList.remove('show');
 
-document.getElementById('deck-btn').onclick=e=>{const g=document.getElementById('do-grid'); g.innerHTML=''; for(let v=0;v<=9;v++){const d=CARDS[v],r=document.createElement('div'); r.className='do-row'; r.innerHTML=`<div class="do-mini"><img src="assets/cards/${v}.png"></div><div class="do-info"><div class="do-name">${d.name}</div></div>`; r.onclick=()=>{document.getElementById('do-detail-box').style.display='block'; document.getElementById('do-detail-name').textContent=d.name; document.getElementById('do-detail-desc').textContent=d.desc;}; g.appendChild(r);} document.getElementById('deck-overlay').classList.add('show');};
+document.getElementById('deck-btn').onclick=e=>{const g=document.getElementById('do-grid'); g.innerHTML=''; for(let v=0;v<=9;v++){const d=CARDS[v],r=document.createElement('div'); r.className='do-row'; r.innerHTML=`<div class="do-mini"><img src="assets/cards/${v}.png" onerror="this.style.display='none'"></div><div class="do-info"><div class="do-name">${d.name}</div></div>`; r.onclick=()=>{document.getElementById('do-detail-box').style.display='block'; document.getElementById('do-detail-name').textContent=d.name; document.getElementById('do-detail-desc').textContent=d.desc;}; g.appendChild(r);} document.getElementById('deck-overlay').classList.add('show');};
