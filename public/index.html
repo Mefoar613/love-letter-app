@@ -16,7 +16,6 @@
 <body>
 <audio id="bgm" src="assets/sounds/music.mp3" loop preload="auto"></audio>
 
-<!-- ЗАСТАВКА -->
 <section id="intro" class="screen active">
   <div class="intro-layer" data-layer="1"><img src="assets/intro/panel1.png" alt=""/></div>
   <div class="intro-layer" data-layer="2"><img src="assets/intro/panel2.png" alt=""/></div>
@@ -24,7 +23,6 @@
   <div class="intro-hint">тапни, чтобы продолжить</div>
 </section>
 
-<!-- МЕНЮ -->
 <section id="menu" class="screen">
   <div class="menu-bg"></div>
   <header class="menu-header">
@@ -45,7 +43,6 @@
   <footer class="menu-footer">тёмная дуэль v10</footer>
 </section>
 
-<!-- ОБУЧЕНИЕ -->
 <section id="tutorial" class="screen">
   <div class="table-bg"></div>
   <div class="tut-overlay" id="tut-overlay">
@@ -59,14 +56,12 @@
   <button class="btn btn-ghost tut-skip" id="tut-skip">Пропустить обучение</button>
 </section>
 
-<!-- БРАУЗЕР ЛОББИ -->
 <section id="lobby-browser" class="screen">
   <div class="lb-header"><button class="lb-back" id="lb-back">← Назад</button><div class="lb-title">Лобби</div></div>
   <div class="lb-list" id="lb-list"><div class="lb-empty">Нет открытых лобби</div></div>
   <div class="lb-bottom"><button class="btn btn-primary" id="btn-create-lobby"><span>Создать лобби</span></button></div>
 </section>
 
-<!-- СОЗДАНИЕ ЛОББИ -->
 <section id="lobby-create" class="screen">
   <div class="lb-header"><button class="lb-back" id="lc-back">← Назад</button><div class="lb-title">Новое лобби</div></div>
   <div class="lc-content">
@@ -80,7 +75,6 @@
   </div>
 </section>
 
-<!-- ВНУТРИ ЛОББИ -->
 <section id="lobby" class="screen">
   <div class="lobby-content">
     <h2>Лобби</h2>
@@ -100,20 +94,16 @@
   </div>
 </section>
 
-<!-- РУБАШКИ -->
 <section id="backs" class="screen">
   <div class="lb-header"><button class="lb-back" id="backs-back">← Назад</button><div class="lb-title">Рубашки</div></div>
   <div class="backs-grid" id="backs-grid"></div>
 </section>
 
-<!-- ИГРА -->
 <section id="game" class="screen">
   <div class="table-bg"></div>
 
-  <!-- Зона соперников (верх) -->
   <div class="g-opponents" id="g-opponents"></div>
 
-  <!-- Середина -->
   <div class="g-middle">
     <div class="excluded-zone"><div class="excluded-label">Исключено</div><div class="excluded-cards" id="excluded-cards"></div></div>
     <div class="g-log-strip" id="log-strip">
@@ -125,7 +115,6 @@
     </div>
   </div>
 
-  <!-- Моя зона (низ) -->
   <div class="g-half g-bottom">
     <div class="g-discard-strip"><span class="g-discard-label">Мой сброс</span><div class="g-discard-row" id="me-discard"></div></div>
     <div class="g-card-center" id="my-card-zone"></div>
@@ -138,10 +127,8 @@
     </div>
   </div>
 
-  <!-- VFX слой -->
   <div id="vfx-layer"></div>
 
-  <!-- ОВЕРЛЕИ -->
   <div class="overlay card-zoom" id="card-zoom">
     <div class="cz-inner">
       <div class="cz-card" id="cz-card-img"></div>
@@ -176,7 +163,6 @@
     </div>
   </div>
 
-  <!-- Выбор цели (для 3-4 игроков или Федерал) -->
   <div class="overlay target-modal" id="target-modal">
     <div class="am-inner">
       <div class="am-title" id="target-title">Выбери цель</div>
@@ -198,7 +184,6 @@
     </div>
   </div>
 
-  <!-- Прозрачный баннер раунда -->
   <div class="overlay round-over" id="round-over">
     <div class="ro-inner">
       <div class="ro-title" id="ro-title">Раунд</div>
@@ -207,7 +192,6 @@
     </div>
   </div>
 
-  <!-- Конец игры -->
   <div class="overlay game-over" id="game-over">
     <div class="ro-inner go-full">
       <div class="ro-glyph" id="go-glyph">✦</div><div class="ro-title" id="go-title">Игра окончена</div>
@@ -218,7 +202,6 @@
     </div>
   </div>
 
-  <!-- Уведомление о сдаче -->
   <div class="overlay surrender-notice" id="surrender-notice">
     <div class="ro-inner"><div class="ro-title" style="font-size:20px" id="surrender-text"></div></div>
   </div>
@@ -226,6 +209,6 @@
   <div class="toast" id="toast"></div>
 </section>
 
-<script src="app.js"></script>
+<script src="app.js?v=2"></script>
 </body>
 </html>
