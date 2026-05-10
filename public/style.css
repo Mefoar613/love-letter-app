@@ -57,7 +57,7 @@ button{font-family:inherit;border:none;cursor:pointer;color:inherit;background:n
 .btn-ghost{background:rgba(0,0,0,.35);color:var(--ink-d);border:1px solid rgba(240,227,200,.16);font-size:14px;padding:11px 14px}
 
 /* ═══ ОБУЧЕНИЕ ═══ */
-#tutorial{background:var(--bg);position:relative}
+#tutorial{background:var(--bg);}
 #tutorial .table-bg{z-index:0}
 .tut-overlay{position:absolute;inset:0;z-index:100;display:flex;align-items:flex-end;justify-content:center;padding:0 16px calc(80px + env(safe-area-inset-bottom));pointer-events:none}
 .tut-dialog{pointer-events:all;background:rgba(18,12,30,.97);border:1px solid var(--gold);border-radius:12px;padding:18px 16px;max-width:340px;width:100%;box-shadow:0 -10px 40px rgba(0,0,0,.7);animation:fadeIn .3s ease}
