@@ -1,5 +1,5 @@
 // =====================================================================
-// Тёмная Дуэль — Frontend v11 (Идеальное Обучение + Фикс Запуска)
+// Тёмная Дуэль — Frontend v12 (Без заставки, мгновенный старт)
 // =====================================================================
 const tg=window.Telegram?.WebApp;
 if(tg){tg.ready();tg.expand();tg.setHeaderColor?.('#08050f');tg.setBackgroundColor?.('#08050f');}
@@ -31,7 +31,8 @@ let mySelectedBack='back';
 
 // ─── ЗВУК И ВИБРО ───
 const bgm=document.getElementById('bgm');if(bgm)bgm.volume=.38;
-let musicStarted=false;function startMusic(){if(musicStarted||!bgm)return;musicStarted=true;bgm.play().catch(()=>{musicStarted=false});}
+let musicStarted=false;
+function startMusic(){if(musicStarted||!bgm)return;musicStarted=true;bgm.play().catch(()=>{musicStarted=false});}
 let audioCtx=null;
 function playSound(type='click'){try{if(!audioCtx)audioCtx=new(window.AudioContext||window.webkitAudioContext)();const n=audioCtx.currentTime,o=audioCtx.createOscillator(),g=audioCtx.createGain();o.connect(g);g.connect(audioCtx.destination);
 if(type==='click'){o.type='triangle';o.frequency.setValueAtTime(800,n);o.frequency.exponentialRampToValueAtTime(380,n+.07);g.gain.setValueAtTime(.13,n);g.gain.exponentialRampToValueAtTime(.001,n+.09);o.start(n);o.stop(n+.1);}
@@ -39,34 +40,29 @@ if(type==='card'){o.type='sine';o.frequency.setValueAtTime(300,n);o.frequency.ex
 if(type==='clash'){o.type='square';o.frequency.setValueAtTime(150,n);o.frequency.exponentialRampToValueAtTime(50,n+.3);g.gain.setValueAtTime(.3,n);g.gain.exponentialRampToValueAtTime(.001,n+.4);o.start(n);o.stop(n+.5);}
 if(type==='success'){o.type='sine';o.frequency.setValueAtTime(523,n);o.frequency.setValueAtTime(659,n+.15);o.frequency.setValueAtTime(784,n+.3);g.gain.setValueAtTime(.15,n);g.gain.exponentialRampToValueAtTime(.001,n+.5);o.start(n);o.stop(n+.55);}
 }catch(e){}}
-document.body.addEventListener('click',e=>{if(e.target.closest('.btn,.am-opt,.g-deck-btn,.g-log-strip,.play-arrow,.chancellor-option,.lb-card,.back-option,.lc-slot,#intro,.btn-close-bottom,.do-row'))playSound('click');},true);
+
+document.body.addEventListener('click',e=>{
+  startMusic(); // Музыка стартует по первому клику куда угодно
+  if(e.target.closest('.btn,.am-opt,.g-deck-btn,.g-log-strip,.play-arrow,.chancellor-option,.lb-card,.back-option,.lc-slot,.btn-close-bottom,.do-row'))playSound('click');
+},true);
+
 function triggerVibe(t='medium'){if(tg?.HapticFeedback)tg.HapticFeedback.impactOccurred(t);}
 function shakeScreen(){const g=document.getElementById('game');g.classList.remove('shake-screen');void g.offsetWidth;g.classList.add('shake-screen');triggerVibe('heavy');playSound('clash');}
 
-// ─── ЭКРАНЫ И ЗАСТАВКА ───
+// ─── ЭКРАНЫ (МГНОВЕННЫЙ СТАРТ) ───
 function showScreen(id){document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('active',s.id===id));}
 
-let introStep=0;const introLayers=document.querySelectorAll('.intro-layer'),introHint=document.querySelector('.intro-hint');
-function advanceIntro(){
-  startMusic();
-  if(introStep<introLayers.length){
-    introLayers[introStep].classList.add('show');
-    introStep++;
-    if(introStep===introLayers.length && introHint) introHint.textContent='тапни, чтобы войти';
-  } else {
-    document.getElementById('intro').removeEventListener('click',advanceIntro);
-    setTimeout(()=>showScreen('menu'),100);
-  }
-}
-
 window.addEventListener('load',()=>{
-  advanceIntro(); // Первый запуск
-  document.getElementById('intro').addEventListener('click',advanceIntro);
+  // Убираем заставку нафиг
+  const introEl = document.getElementById('intro');
+  if(introEl) introEl.classList.remove('active');
+  
+  // Сразу показываем меню
+  showScreen('menu');
   connectSocket();
+  
   const sp=tg?.initDataUnsafe?.start_param;
   if(sp){
-    document.getElementById('intro').classList.remove('active');
-    showScreen('menu');
     setTimeout(()=>{socket.emit('join_lobby',{lobbyId:sp,user:ME});showScreen('lobby');},500);
   }
 });
