@@ -200,15 +200,12 @@ function renderTutStep() {
       const textEl = document.getElementById('tut-text');
       if (textEl) textEl.textContent = step.text;
 
-      // Очищаем игровую зону от предыдущих карт
       const gameArea = document.getElementById('tut-game-area');
       if(gameArea) gameArea.innerHTML = '';
 
-      // Создаем контейнер для карт
       const cardsRow = document.createElement('div');
       cardsRow.className = 'tut-cards';
 
-      // Вспомогательная функция для добавления карт
       const addCard = (val, hl) => {
          const c = makeCard({value: val}, true, 'card--big', mySelectedBack);
          if(hl) c.classList.add('tut-highlight');
@@ -216,52 +213,48 @@ function renderTutStep() {
          return c;
       };
 
-      // Отрисовка визуала в зависимости от шага
       if (tutStep === 1) {
-         cardsRow.appendChild(makeCard(null, false, 'card--big', mySelectedBack)); // Рубашка
+         cardsRow.appendChild(makeCard(null, false, 'card--big', mySelectedBack));
       }
       else if (tutStep === 2) {
          const wrap = document.createElement('div');
          wrap.className = 'play-arrow-wrap';
-
          const c = makeCard({value: 1}, true, 'card--big', mySelectedBack);
          c.classList.add('my-turn-glow');
-
          const arr = document.createElement('div');
          arr.className = 'play-arrow';
-
          wrap.appendChild(arr);
          wrap.appendChild(c);
-
          const c2 = makeCard({value: 3}, true, 'card--big', mySelectedBack);
          cardsRow.appendChild(wrap);
          cardsRow.appendChild(c2);
       }
-      else if (tutStep === 4) addCard(1, true); // Детектив
-      else if (tutStep === 5) addCard(3, true); // Громила
-      else if (tutStep === 6) addCard(4, true); // Коп
-      else if (tutStep === 7) addCard(9, true); // Компромат
+      else if (tutStep === 4) addCard(1, true);
+      else if (tutStep === 5) addCard(3, true);
+      else if (tutStep === 6) addCard(4, true);
+      else if (tutStep === 7) addCard(9, true);
       else if (tutStep === 8) {
-         addCard(8, true); // Роковая женщина
-         addCard(5, false); // Федерал
+         addCard(8, true);
+         addCard(5, false);
       }
 
-      // Если на этом шаге есть карты - добавляем их на экран
       if (gameArea && cardsRow.children.length > 0) {
         gameArea.appendChild(cardsRow);
       }
 
-      // Обновляем текст кнопки
       const nextBtn = document.getElementById('tut-next');
       if(nextBtn) {
         nextBtn.querySelector('span').textContent = (tutStep === TUTORIAL_STEPS.length - 1) ? 'Начать играть!' : 'Далее';
       }
 
-      playSound('card'); // Звук при переключении шага
+      playSound('card');
 
   } catch (e) {
-      // Если что-то сломается, мы увидим это на экране, а не просто черный фон
-      alert("Ошибка в обучении: " + e.message);
+      if(window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.showAlert) {
+          window.Telegram.WebApp.showAlert("Ошибка: " + e.message);
+      } else {
+          alert("Ошибка: " + e.message);
+      }
   }
 }
 
@@ -280,7 +273,6 @@ function handleNewState(s){if(busyAnimating||isOverlayOpen()){stateQueue.push({t
 
 function processState(s){
   const isFirst=!lastState;
-  // Основной оппонент для 2-player анимаций
   const mainOpp=s.opponents?.[0];
   const oppPlayed=!isFirst&&mainOpp&&(mainOpp.discard?.length||0)>prevOppDiscardLen;
 
@@ -303,7 +295,6 @@ function finishProcess(s){
   renderState(s);busyAnimating=false;flushQueue();
 }
 
-// ─── АНИМАЦИИ ХОДА ПРОТИВНИКА ───
 function animateOppRevealPart1(playedCard,backName,cb){
   const layer=document.getElementById('vfx-layer');layer.innerHTML='';
   const ex=document.createElement('div');ex.className='card card--big';
@@ -319,7 +310,6 @@ function animateOppRevealPart2(cb){
   setTimeout(()=>{if(activeRevealCard?.parentNode)activeRevealCard.parentNode.removeChild(activeRevealCard);activeRevealCard=null;cb();},800);
 }
 
-// ─── VFX ───
 function handleVFX(data,callback=()=>{}){
   const isDirect=!busyAnimating;if(isDirect)busyAnimating=true;
   const layer=document.getElementById('vfx-layer');let dur=2000;
@@ -367,7 +357,6 @@ function handleVFX(data,callback=()=>{}){
   },dur);
 }
 
-// ═══ РЕНДЕР ═══
 function renderState(s){
   document.getElementById('me-name').textContent=s.me?.name||'Вы';
   document.getElementById('me-status').textContent=s.isMyTurn?'твой ход':(s.me?.protected?'под защитой':'');
@@ -385,7 +374,6 @@ function renderState(s){
   else{document.getElementById('round-over').classList.remove('show');document.getElementById('game-over').classList.remove('show');}
 }
 
-// ─── РЕНДЕР ОППОНЕНТОВ (1-3) ───
 function renderOpponents(s){
   const zone=document.getElementById('g-opponents');zone.innerHTML='';
   const opps=s.opponents||[];
@@ -393,11 +381,9 @@ function renderOpponents(s){
 
   opps.forEach(opp=>{
     const col=document.createElement('div');col.className='g-opp-col';
-    // Бар
     const bar=document.createElement('div');bar.className='g-player-bar';
     bar.innerHTML=`<div class="g-av-wrap"><div class="g-avatar"${opp.avatar?` style="background-image:url('${opp.avatar}')"`:''}></div><div><div class="g-name">${esc(opp.name)}</div><div class="g-status">${opp.isTurn?'ходит':(opp.protected?'защита':(opp.eliminated?'выбыл':''))}</div></div></div><div class="g-tokens" id="opp-tok-${opp.userId}"></div>`;
     col.appendChild(bar);
-    // Карта
     const cardZone=document.createElement('div');cardZone.className='g-card-center';
     if(opp.handCount>0){
       const card=makeCard(null,false,'card--opp',opp.back||'back');
@@ -405,7 +391,6 @@ function renderOpponents(s){
       cardZone.appendChild(card);
     }
     col.appendChild(cardZone);
-    // Сброс
     const dstrip=document.createElement('div');dstrip.className='g-discard-strip';
     dstrip.innerHTML=`<span class="g-discard-label">Сброс</span>`;
     const drow=document.createElement('div');drow.className='g-discard-row';
@@ -416,12 +401,10 @@ function renderOpponents(s){
     });
     dstrip.appendChild(drow);col.appendChild(dstrip);
     zone.appendChild(col);
-    // Жетоны
     setTimeout(()=>renderTokens('opp-tok-'+opp.userId,opp.tokens||0),0);
   });
 }
 
-// ─── МОИ КАРТЫ ───
 function renderMyCards(s){
   const zone=document.getElementById('my-card-zone');zone.innerHTML='';
   if(!s.me?.hand?.length)return;
@@ -456,7 +439,7 @@ function makeCard(card,faceUp,sizeClass,backName){
 }
 
 function updateLogStrip(log){
-  const l=(log||[]).filter(l=>l&&!l.startsWith('—'));// Без маркеров раунда в preview
+  const l=(log||[]).filter(l=>l&&!l.startsWith('—'));
   document.getElementById('log-line-1').textContent=l[l.length-1]||'—';
   document.getElementById('log-line-2').textContent=l[l.length-2]||'';
 }
@@ -488,19 +471,17 @@ function renderTokens(id,count){
   el.innerHTML=h;
 }
 
-// ─── СЫГРАТЬ КАРТУ ───
 function onPlay(card,cardEl,s){
   if(!s?.isMyTurn)return;
-  // ФИкс карты 8: проверяем ДО любой анимации
   if(s.me.mustPlayCountess&&card.value!==8){
-    showToast('Роковая женщина! Обязан сыграть карту 8.');
-    return; // Ничего не происходит, карта не улетает
+    if(window.Telegram?.WebApp?.showAlert) window.Telegram.WebApp.showAlert('Роковая женщина! Обязан сыграть карту 8.');
+    else showToast('Роковая женщина! Обязан сыграть карту 8.');
+    return;
   }
   pendingCard=card;pendingCardElement=cardEl;
   const opps=(s.opponents||[]).filter(o=>!o.eliminated&&!o.protected);
 
   if(card.value===1){
-    // Если >1 соперник — сначала выбираем цель, потом угадываем
     if(opps.length>1)openTargetThenGuess(card,opps);
     else openGuessModal(card,opps[0]?.userId);
   }
@@ -513,7 +494,6 @@ function onPlay(card,cardEl,s){
   }
 }
 
-// Детектив: модалка угадывания
 function openGuessModal(card,targetUserId){
   const el=document.getElementById('action-modal'),g=document.getElementById('action-options');g.innerHTML='';
   for(let v=0;v<=9;v++){
@@ -529,7 +509,6 @@ function openGuessModal(card,targetUserId){
   el.classList.add('show');
 }
 
-// Для 3-4: сначала цель, потом угадывание
 function openTargetThenGuess(card,opps){
   const el=document.getElementById('target-modal'),o=document.getElementById('target-options');o.innerHTML='';
   document.getElementById('target-title').textContent='Кого проверить?';
@@ -541,17 +520,14 @@ function openTargetThenGuess(card,opps){
   el.classList.add('show');
 }
 
-// Федерал: выбор цели включая себя
 function openFederalModal(card,s){
   const el=document.getElementById('target-modal'),o=document.getElementById('target-options');o.innerHTML='';
   document.getElementById('target-title').textContent='Облава: на кого?';
-  // Себя
   const selfOpt=document.createElement('div');selfOpt.className='am-opt';selfOpt.innerHTML=`<span class="num">★</span>${esc(s.me.name)}<br><small style="opacity:.5">себя</small>`;
   selfOpt.addEventListener('click',()=>{el.classList.remove('show');flushQueue();
     pendingCardElement.classList.remove('my-turn-glow');pendingCardElement.classList.add('my-playing');playSound('card');
     setTimeout(()=>socket.emit('play',{cardId:card.id,targetUserId:'self',target:'self'}),600);
   });o.appendChild(selfOpt);
-  // Противники
   (s.opponents||[]).filter(op=>!op.eliminated).forEach(op=>{
     if(op.protected){const d=document.createElement('div');d.className='am-opt';d.style.opacity='.4';d.innerHTML=`<span class="num">🛡</span>${esc(op.name)}<br><small>защищён</small>`;o.appendChild(d);return;}
     const d=document.createElement('div');d.className='am-opt';d.innerHTML=`<span class="num">★</span>${esc(op.name)}`;
@@ -563,7 +539,6 @@ function openFederalModal(card,s){
   el.classList.add('show');
 }
 
-// Выбор цели для карт 2,3,7 (при >1 сопернике)
 function openTargetModal(card,opps,title){
   const el=document.getElementById('target-modal'),o=document.getElementById('target-options');o.innerHTML='';
   document.getElementById('target-title').textContent=title||'Выбери цель';
@@ -577,7 +552,6 @@ function openTargetModal(card,opps,title){
   el.classList.add('show');
 }
 
-// Chancellor
 function showChancellor(cards){
   const el=document.getElementById('chancellor-modal'),w=document.getElementById('chancellor-cards');w.innerHTML='';
   cards.forEach(c=>{const o=document.createElement('div');o.className='chancellor-option';const ce=makeCard(c,true,'card--big');
@@ -586,7 +560,6 @@ function showChancellor(cards){
     o.appendChild(ce);o.appendChild(l);w.appendChild(o);});el.classList.add('show');
 }
 
-// Зум
 function openZoom(card){
   if(!card)return;const def=CARDS[card.value],w=document.getElementById('cz-card-img');w.innerHTML='';
   const img=document.createElement('img');img.src=`assets/cards/${card.value}.png`;img.onerror=()=>img.style.display='none';w.appendChild(img);
@@ -598,7 +571,6 @@ function openZoom(card){
   document.getElementById('card-zoom').classList.add('show');
 }
 
-// Колода-справочник
 document.getElementById('deck-btn').addEventListener('click',e=>{
   e.stopPropagation();const g=document.getElementById('do-grid');g.innerHTML='';
   document.getElementById('do-detail-box').style.display='none';
@@ -611,7 +583,6 @@ document.getElementById('deck-btn').addEventListener('click',e=>{
   document.getElementById('deck-overlay').classList.add('show');
 });
 
-// Peek
 function showPeek(data){
   const w=document.getElementById('peek-card');w.innerHTML='';
   if(data.card)w.appendChild(makeCard(data.card,true,'card--big'));
@@ -621,7 +592,6 @@ function showPeek(data){
   document.getElementById('peek-overlay').classList.add('show');
 }
 
-// ─── РЕЗУЛЬТАТЫ ───
 function showRoundOver(ro){
   const ov=document.getElementById('round-over'),iW=ro.winnerId===ME.id;
   document.getElementById('ro-title').textContent=iW?'✦ РАУНД ВАШ ✦':'✗ РАУНД ПОТЕРЯН';
@@ -646,7 +616,6 @@ function showGameOver(go){
   tg?.HapticFeedback?.notificationOccurred?.(iW?'success':'error');
 }
 
-// Сдаться
 document.getElementById('btn-surrender').addEventListener('click',()=>{
   if(!lastState)return;
   if(confirm('Точно сдаёшься? 💀')){socket.emit('surrender');}
@@ -660,7 +629,6 @@ function closeAllOverlays(){document.querySelectorAll('.overlay').forEach(o=>o.c
 function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500);}
 function esc(s){return String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 
-// ─── КРЕСТИКИ ───
 document.getElementById('cz-close').addEventListener('click',()=>{document.getElementById('card-zoom').classList.remove('show');flushQueue();});
 document.getElementById('lo-close').addEventListener('click',()=>{document.getElementById('log-overlay').classList.remove('show');flushQueue();});
 document.getElementById('do-close').addEventListener('click',()=>{document.getElementById('deck-overlay').classList.remove('show');flushQueue();});
