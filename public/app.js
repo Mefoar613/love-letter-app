@@ -1,5 +1,5 @@
 // =====================================================================
-// Тёмная Дуэль — Frontend v14 (Бронебойная версия)
+// Тёмная Дуэль — Frontend v15 (Безопасный старт без заставки)
 // =====================================================================
 const tg=window.Telegram?.WebApp;
 if(tg){tg.ready();tg.expand();tg.setHeaderColor?.('#08050f');tg.setBackgroundColor?.('#08050f');}
@@ -29,7 +29,7 @@ const CARDS={
 const AVAILABLE_BACKS=[{id:'back',name:'Классика'},{id:'back_noir',name:'Нуар'},{id:'back_red',name:'Кровь'},{id:'back_gold',name:'Золото'},{id:'back_smoke',name:'Дым'}];
 let mySelectedBack='back';
 
-// ─── БЕЗОПАСНАЯ ПРИВЯЗКА КНОПОК (Защита от краша) ───
+// ─── БЕЗОПАСНАЯ ПРИВЯЗКА КНОПОК ───
 function bindClick(id, cb) {
   const el = document.getElementById(id);
   if (el) el.addEventListener('click', cb);
@@ -59,7 +59,7 @@ function shakeScreen(){const g=document.getElementById('game');if(!g)return;g.cl
 function showScreen(id){document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('active',s.id===id));}
 
 document.addEventListener('DOMContentLoaded', ()=>{
-  showScreen('menu');
+  showScreen('menu'); // Принудительно показываем меню
   connectSocket();
   const sp=tg?.initDataUnsafe?.start_param;
   if(sp){
