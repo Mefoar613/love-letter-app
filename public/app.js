@@ -1,5 +1,5 @@
 // =====================================================================
-// Тёмная Дуэль — Frontend v10.1 (Рабочая версия + Визуал обучения)
+// Тёмная Дуэль — Frontend v10
 // =====================================================================
 const tg=window.Telegram?.WebApp;
 if(tg){tg.ready();tg.expand();tg.setHeaderColor?.('#08050f');tg.setBackgroundColor?.('#08050f');}
@@ -165,62 +165,32 @@ function renderBacks(){
 }
 
 // ═══ ОБУЧЕНИЕ ═══
-const TUTORIAL_STEPS = [
-  {text:'Добро пожаловать в Тёмную Дуэль! Это карточная игра на логику, блеф и дедукцию.', show: []},
-  {text:'В начале раунда каждому игроку сдаётся по 1 карте. Ещё 1 откладывается втёмную.', show: ['back', 'back']},
-  {text:'На своём ходу ты берёшь 1 карту из колоды. Теперь у тебя 2 карты — выбери одну и сыграй её.', show: [1, 6], glow: 0},
-  {text:'Стрелка сверху — это кнопка «Сыграть».', show: [1], arrow: 0},
-  {text:'Карта 1 — Детектив. Назови номинал карты соперника. Угадал? Соперник выбывает!', show: [1], glow: 0},
-  {text:'Карта 3 — Громила. Сравниваете карты с соперником. У кого номинал ниже — тот выбывает.', show: [3, 'back'], glow: 0},
-  {text:'Карта 4 — Продажный коп. Защищает тебя до следующего хода.', show: [4], glow: 0},
-  {text:'Карта 9 — Компромат. НО: если ты её сбросишь или тебя заставят — ты проигрываешь раунд!', show: [9], danger: 0},
-  {text:'Карта 8 — Роковая женщина. Если у тебя на руке одновременно 8 и (5 или 7) — обязан сыграть восьмёрку.', show: [8, 5], glow: 0},
-  {text:'Счётчик «Видено» показывает сколько карт этого типа ты уже видел. Используй эту информацию для дедукции!', show: [1], badge: '2/6'},
-  {text:'Побеждает тот, кто первый наберёт нужное число жетонов: 6 для двоих. Удачи в дуэли! 🎴', show: []}
+const TUTORIAL_STEPS=[
+  {text:'Добро пожаловать в Тёмную Дуэль! Это карточная игра на логику, блеф и дедукцию. Давай я покажу тебе как играть.'},
+  {text:'В колоде 21 карта с номиналами от 0 до 9. В начале раунда каждому игроку сдаётся по 1 карте. Ещё 1 карта откладывается втёмную, а 3 — открытыми (для игры вдвоём).'},
+  {text:'На своём ходу ты берёшь 1 карту из колоды (она приходит автоматически). Теперь у тебя 2 карты — выбери одну и сыграй её.',cards:'hand',highlight:'arrow'},
+  {text:'У каждой карты есть свой эффект. Тапни по карте, чтобы узнать, что она делает. А стрелка сверху — это кнопка «Сыграть».'},
+  {text:'Карта 1 — Детектив. Самая частая карта (6 штук). Назови номинал карты соперника. Угадал? Соперник выбывает!'},
+  {text:'Карта 3 — Громила. Сравниваете карты с соперником. У кого номинал ниже — тот выбывает. Опасная штука!'},
+  {text:'Карта 4 — Продажный коп. Защищает тебя до следующего хода. Никакие эффекты на тебя не действуют.'},
+  {text:'Карта 9 — Компромат. Самая ценная карта (номинал 9). НО: если ты её сбросишь или тебя заставят — ты проигрываешь раунд!'},
+  {text:'Карта 8 — Роковая женщина. Если у тебя на руке одновременно 8 и (5 или 7) — обязан сыграть восьмёрку.'},
+  {text:'Раунд заканчивается когда: все кроме одного выбыли, или кончилась колода (побеждает тот, у кого номинал карты выше).'},
+  {text:'Побеждает тот, кто первый наберёт нужное число жетонов: 6 для двоих, 5 для троих, 4 для четверых.'},
+  {text:'Счётчик «Видено X/Y» на карте показывает сколько карт этого типа ты уже видел. Используй эту информацию для блефа и дедукции!'},
+  {text:'Ты готов! Жми «Играть» в меню, создай лобби, добавь бота или пригласи друга. Удачи в дуэли! 🎴'},
 ];
-
-let tutStep = 0;
-function startTutorial() {
-  tutStep = 0;
-  showScreen('tutorial');
-  renderTutStep();
+let tutStep=0;
+function startTutorial(){
+  tutStep=0;showScreen('tutorial');renderTutStep();
 }
-
-function renderTutStep() {
-  if (tutStep >= TUTORIAL_STEPS.length) { showScreen('menu'); return; }
-  const step = TUTORIAL_STEPS[tutStep];
-  
-  document.getElementById('tut-text').textContent = step.text;
-  
-  const area = document.getElementById('tut-game-area');
-  area.innerHTML = ''; 
-  
-  if (step.show && step.show.length > 0) {
-    let html = '<div style="display:flex; justify-content:center; gap:15px; margin-top:15vh;">';
-    
-    for (let i = 0; i < step.show.length; i++) {
-      let cardVal = step.show[i];
-      let imgSrc = cardVal === 'back' ? 'assets/cards/back.png' : `assets/cards/${cardVal}.png`;
-      
-      let style = 'width:90px; border-radius:6px; box-shadow: 0 4px 10px rgba(0,0,0,0.8); transition: 0.3s;';
-      
-      if (step.glow === i) style += ' transform: scale(1.15) translateY(-10px); box-shadow: 0 0 25px rgba(201,150,58,1); border: 1px solid #c9963a;';
-      if (step.danger === i) style += ' transform: scale(1.15) translateY(-10px); box-shadow: 0 0 30px rgba(200,30,40,1); border: 1px solid #c0384a;';
-      
-      html += '<div style="position:relative;">';
-      if (step.arrow === i) html += '<div style="position:absolute; top:-35px; left:50%; transform:translateX(-50%); color:#f0c060; font-size:28px;">▼</div>';
-      if (step.badge) html += `<div style="position:absolute; top:-10px; right:-10px; background:#000; color:#f0c060; border:1px solid #c9963a; border-radius:10px; font-size:12px; padding:2px 5px; z-index:2; font-weight:bold;">${step.badge}</div>`;
-      
-      html += `<img src="${imgSrc}" style="${style}" onerror="this.src='assets/cards/back.png'">`;
-      html += '</div>';
-    }
-    html += '</div>';
-    area.innerHTML = html;
-  }
+function renderTutStep(){
+  if(tutStep>=TUTORIAL_STEPS.length){showScreen('menu');return;}
+  const step=TUTORIAL_STEPS[tutStep];
+  document.getElementById('tut-text').textContent=step.text;
 }
-
-document.getElementById('tut-next').addEventListener('click', () => { tutStep++; renderTutStep(); });
-document.getElementById('tut-skip').addEventListener('click', () => showScreen('menu'));
+document.getElementById('tut-next').addEventListener('click',()=>{tutStep++;renderTutStep();});
+document.getElementById('tut-skip').addEventListener('click',()=>showScreen('menu'));
 
 // ═══ ИГРОВОЕ СОСТОЯНИЕ ═══
 let lastState=null,pendingCard=null,pendingCardElement=null;
