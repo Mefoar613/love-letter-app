@@ -188,73 +188,81 @@ function startTutorial(){
   renderTutStep();
 }
 
-function renderTutStep(){
-  if(tutStep >= TUTORIAL_STEPS.length){
-    showScreen('menu');
-    return;
+function renderTutStep() {
+  try {
+      if(tutStep >= TUTORIAL_STEPS.length){
+        showScreen('menu');
+        return;
+      }
+
+      const step = TUTORIAL_STEPS[tutStep];
+      
+      const textEl = document.getElementById('tut-text');
+      if (textEl) textEl.textContent = step.text;
+
+      // Очищаем игровую зону от предыдущих карт
+      const gameArea = document.getElementById('tut-game-area');
+      if(gameArea) gameArea.innerHTML = '';
+
+      // Создаем контейнер для карт
+      const cardsRow = document.createElement('div');
+      cardsRow.className = 'tut-cards';
+
+      // Вспомогательная функция для добавления карт
+      const addCard = (val, hl) => {
+         const c = makeCard({value: val}, true, 'card--big', mySelectedBack);
+         if(hl) c.classList.add('tut-highlight');
+         cardsRow.appendChild(c);
+         return c;
+      };
+
+      // Отрисовка визуала в зависимости от шага
+      if (tutStep === 1) {
+         cardsRow.appendChild(makeCard(null, false, 'card--big', mySelectedBack)); // Рубашка
+      }
+      else if (tutStep === 2) {
+         const wrap = document.createElement('div');
+         wrap.className = 'play-arrow-wrap';
+
+         const c = makeCard({value: 1}, true, 'card--big', mySelectedBack);
+         c.classList.add('my-turn-glow');
+
+         const arr = document.createElement('div');
+         arr.className = 'play-arrow';
+
+         wrap.appendChild(arr);
+         wrap.appendChild(c);
+
+         const c2 = makeCard({value: 3}, true, 'card--big', mySelectedBack);
+         cardsRow.appendChild(wrap);
+         cardsRow.appendChild(c2);
+      }
+      else if (tutStep === 4) addCard(1, true); // Детектив
+      else if (tutStep === 5) addCard(3, true); // Громила
+      else if (tutStep === 6) addCard(4, true); // Коп
+      else if (tutStep === 7) addCard(9, true); // Компромат
+      else if (tutStep === 8) {
+         addCard(8, true); // Роковая женщина
+         addCard(5, false); // Федерал
+      }
+
+      // Если на этом шаге есть карты - добавляем их на экран
+      if (gameArea && cardsRow.children.length > 0) {
+        gameArea.appendChild(cardsRow);
+      }
+
+      // Обновляем текст кнопки
+      const nextBtn = document.getElementById('tut-next');
+      if(nextBtn) {
+        nextBtn.querySelector('span').textContent = (tutStep === TUTORIAL_STEPS.length - 1) ? 'Начать играть!' : 'Далее';
+      }
+
+      playSound('card'); // Звук при переключении шага
+
+  } catch (e) {
+      // Если что-то сломается, мы увидим это на экране, а не просто черный фон
+      alert("Ошибка в обучении: " + e.message);
   }
-
-  const step = TUTORIAL_STEPS[tutStep];
-  document.getElementById('tut-text').textContent = step.text;
-
-  // Очищаем игровую зону от предыдущих карт
-  const gameArea = document.getElementById('tut-game-area');
-  if(gameArea) gameArea.innerHTML = '';
-
-  // Создаем контейнер для карт
-  const cardsRow = document.createElement('div');
-  cardsRow.className = 'tut-cards';
-
-  // Вспомогательная функция для добавления карт
-  const addCard = (val, hl) => {
-     const c = makeCard({value: val}, true, 'card--big', mySelectedBack);
-     if(hl) c.classList.add('tut-highlight');
-     cardsRow.appendChild(c);
-     return c;
-  };
-
-  // Отрисовка визуала в зависимости от шага
-  if (tutStep === 1) {
-     cardsRow.appendChild(makeCard(null, false, 'card--big', mySelectedBack)); // Рубашка
-  }
-  else if (tutStep === 2) {
-     const wrap = document.createElement('div');
-     wrap.className = 'play-arrow-wrap';
-     
-     const c = makeCard({value: 1}, true, 'card--big', mySelectedBack);
-     c.classList.add('my-turn-glow');
-     
-     const arr = document.createElement('div');
-     arr.className = 'play-arrow';
-     
-     wrap.appendChild(arr);
-     wrap.appendChild(c);
-
-     const c2 = makeCard({value: 3}, true, 'card--big', mySelectedBack);
-     cardsRow.appendChild(wrap);
-     cardsRow.appendChild(c2);
-  }
-  else if (tutStep === 4) addCard(1, true); // Детектив
-  else if (tutStep === 5) addCard(3, true); // Громила
-  else if (tutStep === 6) addCard(4, true); // Коп
-  else if (tutStep === 7) addCard(9, true); // Компромат
-  else if (tutStep === 8) {
-     addCard(8, true); // Роковая женщина
-     addCard(5, false); // Федерал
-  }
-
-  // Если на этом шаге есть карты - добавляем их на экран
-  if (gameArea && cardsRow.children.length > 0) {
-    gameArea.appendChild(cardsRow);
-  }
-
-  // Обновляем текст кнопки
-  const nextBtn = document.getElementById('tut-next');
-  if(nextBtn) {
-    nextBtn.querySelector('span').textContent = (tutStep === TUTORIAL_STEPS.length - 1) ? 'Начать играть!' : 'Далее';
-  }
-
-  playSound('card'); // Звук при переключении шага
 }
 
 document.getElementById('tut-next').addEventListener('click',()=>{tutStep++;renderTutStep();});
