@@ -42,6 +42,7 @@ if(type==='burn'){o.type='sawtooth';o.frequency.setValueAtTime(100,n);o.frequenc
 if(type==='magic'){o.type='sine';o.frequency.setValueAtTime(400,n);o.frequency.exponentialRampToValueAtTime(800,n+.4);g.gain.setValueAtTime(.1,n);g.gain.exponentialRampToValueAtTime(.001,n+.5);o.start(n);o.stop(n+.6);}
 if(type==='success'){o.type='sine';o.frequency.setValueAtTime(523,n);o.frequency.setValueAtTime(659,n+.15);o.frequency.setValueAtTime(784,n+.3);g.gain.setValueAtTime(.15,n);g.gain.exponentialRampToValueAtTime(.001,n+.5);o.start(n);o.stop(n+.55);}
 if(type==='fail'){o.type='sawtooth';o.frequency.setValueAtTime(200,n);o.frequency.exponentialRampToValueAtTime(80,n+.4);g.gain.setValueAtTime(.2,n);g.gain.exponentialRampToValueAtTime(.001,n+.5);o.start(n);o.stop(n+.55);}
+if(type==='splat'){o.type='square';o.frequency.setValueAtTime(80,n);o.frequency.exponentialRampToValueAtTime(20,n+.18);g.gain.setValueAtTime(.45,n);g.gain.exponentialRampToValueAtTime(.001,n+.25);o.start(n);o.stop(n+.28);}
 }catch(e){}}
 document.body.addEventListener('click',e=>{if(e.target.closest('.btn,.am-opt,.g-deck-btn,.g-log-strip,.play-arrow,.chancellor-option,.lb-card,.back-option,.lc-slot,#intro,.btn-close-bottom,.do-row'))playSound('click');},true);
 function triggerVibe(t='medium'){if(tg?.HapticFeedback)tg.HapticFeedback.impactOccurred(t);}
@@ -151,13 +152,37 @@ function showRainbowLoh(){
   },2200);
 }
 
-// ─── Tomato animation ───
+// ─── Tomato animation + splat ───
 function showTomatoFly(){
   const el=document.createElement('div');
   el.className='tomato-fly';
   el.textContent='🍅';
   document.body.appendChild(el);
-  setTimeout(()=>el.remove(),1600);
+  // Splat при ударе (~75% времени полёта)
+  setTimeout(()=>{
+    playSound('splat');
+    el.remove();
+    // Взрыв в центре экрана
+    const splat=document.createElement('div');
+    splat.className='tomato-splat';
+    splat.style.cssText='left:62vw;top:22vh;';
+    document.body.appendChild(splat);
+    // Капли разлетаются
+    const dropEmojis=['🍅','💦','🔴','🩸'];
+    for(let i=0;i<6;i++){
+      const drop=document.createElement('div');
+      drop.className='tomato-splat-drop';
+      drop.textContent=dropEmojis[i%dropEmojis.length];
+      const angle=Math.random()*360;
+      const dist=60+Math.random()*80;
+      const x=Math.cos(angle*Math.PI/180)*dist;
+      const y=Math.sin(angle*Math.PI/180)*dist;
+      drop.style.cssText=`left:calc(62vw + ${x}px);top:calc(22vh + ${y}px);font-size:${24+Math.random()*20}px;animation-duration:${.5+Math.random()*.4}s;animation-delay:${Math.random()*.1}s`;
+      document.body.appendChild(drop);
+      setTimeout(()=>drop.remove(),900);
+    }
+    setTimeout(()=>splat.remove(),700);
+  },850);
 }
 
 // ─── Event text banner ───

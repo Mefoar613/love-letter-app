@@ -121,7 +121,7 @@ button{font-family:inherit;border:none;cursor:pointer;color:inherit;background:n
 #game>*:not(.table-bg):not(.overlay):not(#vfx-layer){position:relative;z-index:1}
 
 /* Зона соперников — адаптивная для 1-3 оппонентов */
-.g-opponents{flex:1;display:flex;gap:2px;padding:0 8px;padding-top:calc(4px + env(safe-area-inset-top));min-height:0}
+.g-opponents{flex:1 1 0;max-height:38vh;display:flex;gap:2px;padding:0 8px;padding-top:calc(4px + env(safe-area-inset-top));min-height:0}
 .g-opp-col{flex:1;display:flex;flex-direction:column;min-width:0;min-height:0;justify-content:space-between;padding:0 4px}
 .g-opp-col .g-player-bar{padding:2px 0}
 .g-opp-col .g-name{font-size:12px}.g-opp-col .g-avatar{width:26px;height:26px}
@@ -132,8 +132,8 @@ button{font-family:inherit;border:none;cursor:pointer;color:inherit;background:n
 /* Для одного оппонента — больше */
 .g-opponents.opp-count-1 .card--opp{width:calc(var(--card-w)*.92);height:calc(var(--card-h)*.92)}
 
-.g-half{flex:1;display:flex;flex-direction:column;padding:0 12px;min-height:0}
-.g-bottom{padding-bottom:calc(6px + env(safe-area-inset-bottom));justify-content:space-between}
+.g-half{flex:2 1 0;display:flex;flex-direction:column;padding:0 12px;min-height:0}
+.g-bottom{padding-bottom:calc(10px + env(safe-area-inset-bottom));justify-content:flex-start}
 .g-middle{flex:0 0 auto;display:flex;flex-direction:column}
 .excluded-zone{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:3px 12px;background:rgba(0,0,0,.3);border-top:1px solid rgba(201,150,58,.12)}
 .excluded-label{font-size:9px;letter-spacing:.28em;text-transform:uppercase;color:var(--ink-m);white-space:nowrap;flex-shrink:0}
@@ -144,7 +144,7 @@ button{font-family:inherit;border:none;cursor:pointer;color:inherit;background:n
 .g-log-line--1{font-size:13.5px;color:var(--gold-b)}.g-log-line--2{font-size:11.5px;color:var(--ink-m);opacity:.8}
 .g-deck-btn{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;padding:3px 8px;border-radius:3px;background:rgba(201,150,58,.1);border:1px solid rgba(201,150,58,.3);color:var(--gold-b);cursor:pointer;line-height:1}
 .deck-count{font-size:9px;letter-spacing:.1em;color:var(--ink-m);margin-top:1px;font-weight:bold}
-.g-player-bar{display:flex;align-items:center;justify-content:space-between;padding:3px 0;flex-shrink:0}
+.g-player-bar{display:flex;align-items:center;justify-content:space-between;padding:3px 0;flex-shrink:0;margin-top:auto}
 .g-av-wrap{display:flex;align-items:center;gap:7px}
 .g-avatar{width:32px;height:32px;border-radius:50%;background:var(--bg-2);border:1.5px solid var(--gold);background-size:cover;background-position:center;flex-shrink:0}
 .g-name{font-family:'Playfair Display',serif;font-size:14px;letter-spacing:.02em}
@@ -157,7 +157,7 @@ button{font-family:inherit;border:none;cursor:pointer;color:inherit;background:n
 .g-discard-strip{display:flex;align-items:center;gap:7px;padding:2px 0;flex-shrink:0}
 .g-discard-label{font-size:9px;letter-spacing:.25em;text-transform:uppercase;color:var(--ink-m);flex-shrink:0}
 .g-discard-row{display:flex;align-items:center;overflow-x:auto;scrollbar-width:none;padding:2px 0;flex:1}.g-discard-row::-webkit-scrollbar{display:none}
-.g-card-center{flex:1;display:flex;align-items:center;justify-content:center;min-height:0;padding:4px 0;position:relative}
+.g-card-center{flex:1 1 0;display:flex;align-items:center;justify-content:center;min-height:0;max-height:clamp(160px,26vh,220px);padding:4px 0;position:relative}
 
 /* ─ КАРТА ─ */
 .card{border-radius:8px;position:relative;flex-shrink:0;transition:transform .22s ease,box-shadow .22s ease}
@@ -178,9 +178,9 @@ button{font-family:inherit;border:none;cursor:pointer;color:inherit;background:n
 .card.opp-turn-glow{animation:oppGlow 1.6s ease-in-out infinite alternate;z-index:5}
 @keyframes oppGlow{from{transform:scale(1);box-shadow:0 0 8px 2px rgba(100,150,255,.35),0 0 20px 4px rgba(100,150,255,.12)}to{transform:scale(1.04) translateY(-3px);box-shadow:0 0 14px 4px rgba(100,150,255,.6),0 0 32px 8px rgba(100,150,255,.22)}}
 
-/* СТРЕЛКА ХОДА — УВЕЛИЧЕНА */
-.play-arrow-wrap{position:relative;margin-top:40px}
-.play-arrow{position:absolute;top:-40px;left:50%;transform:translateX(-50%);width:56px;height:36px;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:20}
+/* СТРЕЛКА ХОДА */
+.play-arrow-wrap{position:relative;padding-top:42px}
+.play-arrow{position:absolute;top:0;left:50%;transform:translateX(-50%);width:56px;height:38px;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:20}
 .play-arrow::before{content:'';border-left:18px solid transparent;border-right:18px solid transparent;border-bottom:26px solid var(--gold-b);filter:drop-shadow(0 0 10px rgba(240,192,96,.8)) drop-shadow(0 0 22px rgba(240,192,96,.35));transition:transform .14s,filter .14s}
 .play-arrow:active::before{transform:scale(.85);filter:drop-shadow(0 0 16px rgba(240,192,96,1))}
 
@@ -286,7 +286,7 @@ button{font-family:inherit;border:none;cursor:pointer;color:inherit;background:n
 @media(max-height:680px){:root{--card-w:72px;--card-h:128px}.g-log-strip{min-height:38px}.game-title{font-size:40px}.g-player-bar{padding:2px 0}.g-avatar{width:28px;height:28px}.g-name{font-size:13px}}
 
 /* ═══ КНОПКА НАСТРОЕК ═══ */
-.btn-settings{position:absolute;top:calc(8px + env(safe-area-inset-top));right:12px;z-index:20;font-size:22px;padding:6px 9px;opacity:.55;transition:opacity .2s,transform .15s;color:var(--gold);background:rgba(0,0,0,.35);border-radius:50%;border:1px solid rgba(201,150,58,.25)}
+.btn-settings{position:absolute;top:calc(8px + env(safe-area-inset-top));right:12px;z-index:20;width:32px;height:32px;padding:0;font-size:18px;line-height:1;display:flex;align-items:center;justify-content:center;opacity:.55;transition:opacity .2s,transform .15s;color:var(--gold);background:rgba(0,0,0,.45);border-radius:50%;border:1px solid rgba(201,150,58,.3)}
 .btn-settings:active{opacity:1;transform:scale(.9)}
 
 /* ═══ ПАНЕЛЬ НАСТРОЕК ═══ */
@@ -310,7 +310,7 @@ button{font-family:inherit;border:none;cursor:pointer;color:inherit;background:n
 .toggle-switch input:checked+.toggle-slider::before{transform:translateX(21px);background:var(--gold-b)}
 
 /* ═══ ADMIN PANEL ═══ */
-#admin-panel{position:absolute;bottom:calc(76px + env(safe-area-inset-bottom));left:10px;z-index:20;display:flex;flex-direction:column;gap:6px}
+#admin-panel{position:absolute;bottom:calc(14px + env(safe-area-inset-bottom));left:10px;z-index:20;display:flex;flex-direction:column;gap:6px}
 .btn-admin{width:34px;height:34px;border-radius:50%;background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.12);font-size:17px;display:flex;align-items:center;justify-content:center;opacity:.45;transition:opacity .2s,transform .15s}
 .btn-admin:active{opacity:1;transform:scale(.88)}
 
@@ -325,8 +325,14 @@ button{font-family:inherit;border:none;cursor:pointer;color:inherit;background:n
 @keyframes lohFloat{0%,100%{transform:translateY(0) rotate(-3deg) scale(1)}50%{transform:translateY(-8px) rotate(3deg) scale(1.05)}}
 
 /* ═══ TOMATO ═══ */
-.tomato-fly{position:fixed;font-size:64px;z-index:2000;pointer-events:none;animation:tomatoFly 1.4s cubic-bezier(.17,.67,.38,1.2) forwards}
-@keyframes tomatoFly{0%{transform:translate(-20vw,60vh) scale(.4) rotate(-30deg);opacity:0}20%{opacity:1}60%{transform:translate(50vw,20vh) scale(1.6) rotate(20deg);opacity:1}85%{transform:translate(80vw,10vh) scale(1.2) rotate(40deg);opacity:.8}100%{transform:translate(115vw,-5vh) scale(.3) rotate(60deg);opacity:0}}
+.tomato-fly{position:fixed;left:0;top:0;font-size:64px;z-index:2000;pointer-events:none;animation:tomatoFly 1.1s cubic-bezier(.2,.8,.4,1) forwards}
+@keyframes tomatoFly{0%{transform:translate(-5vw,70vh) scale(.5) rotate(-20deg);opacity:0}15%{opacity:1}55%{transform:translate(48vw,28vh) scale(1.5) rotate(15deg);opacity:1}75%{transform:translate(62vw,22vh) scale(1.8) rotate(25deg);opacity:1}100%{transform:translate(62vw,22vh) scale(.2) rotate(30deg);opacity:0}}
+
+.tomato-splat{position:fixed;z-index:2001;pointer-events:none;font-size:0;animation:splatGrow .55s cubic-bezier(.2,1.5,.5,1) forwards}
+.tomato-splat::before{content:'💥';font-size:90px}
+.tomato-splat-drop{position:fixed;z-index:2001;pointer-events:none;animation:splatDrop .7s ease-in forwards}
+@keyframes splatGrow{0%{transform:translate(-50%,-50%) scale(0);opacity:0}40%{opacity:1}70%{transform:translate(-50%,-50%) scale(1.3);opacity:.9}100%{transform:translate(-50%,-50%) scale(1.6);opacity:0}}
+@keyframes splatDrop{0%{opacity:1;transform:translateY(0) scale(1)}100%{opacity:0;transform:translateY(60px) scale(.5)}}
 
 /* ═══ УЛУЧШЕННЫЕ АНИМАЦИИ КАРТ ═══ */
 /* Более плавная анимация хода соперника */
