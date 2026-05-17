@@ -15,6 +15,7 @@
 </head>
 <body>
 <audio id="bgm" src="assets/sounds/music.mp3" loop preload="auto"></audio>
+<audio id="loh-sound" src="assets/sounds/loh.mp3" preload="auto"></audio>
 
 <section id="intro" class="screen active">
   <div class="intro-layer" data-layer="1"><img src="assets/intro/panel1.png" alt=""/></div>
@@ -25,6 +26,7 @@
 
 <section id="menu" class="screen">
   <div class="menu-bg"></div>
+  <button class="btn-settings" id="btn-settings-menu" title="Настройки">⚙</button>
   <header class="menu-header">
     <div class="logo-glyph">✦</div>
     <h1 class="game-title">Тёмная<br/>Дуэль</h1>
@@ -40,7 +42,7 @@
     <button class="btn btn-secondary" id="btn-tutorial"><span>Обучение</span><small>узнай правила игры</small></button>
     <button class="btn btn-ghost" id="btn-backs">Рубашки карт</button>
   </div>
-  <footer class="menu-footer">тёмная дуэль v10</footer>
+  <footer class="menu-footer">тёмная дуэль v11</footer>
 </section>
 
 <section id="tutorial" class="screen">
@@ -101,6 +103,7 @@
 
 <section id="game" class="screen">
   <div class="table-bg"></div>
+  <button class="btn-settings" id="btn-settings-game" title="Настройки">⚙</button>
 
   <div class="g-opponents" id="g-opponents"></div>
 
@@ -127,7 +130,14 @@
     </div>
   </div>
 
+  <!-- Admin panel (shown only to admin) -->
+  <div id="admin-panel" style="display:none">
+    <button class="btn-admin" id="btn-admin-loh" title="ЛОООООХ">💀</button>
+    <button class="btn-admin" id="btn-admin-tomato" title="Помидор">🍅</button>
+  </div>
+
   <div id="vfx-layer"></div>
+  <div class="event-banner" id="event-banner"></div>
 
   <div class="overlay card-zoom" id="card-zoom">
     <div class="cz-inner">
@@ -209,6 +219,36 @@
   <div class="toast" id="toast"></div>
 </section>
 
-<script src="app.js?v=2"></script>
+<!-- Настройки (глобальный оверлей) -->
+<div class="overlay settings-overlay" id="settings-overlay">
+  <div class="settings-panel">
+    <div class="settings-title">⚙ Настройки</div>
+    <div class="settings-row">
+      <span class="settings-label">Анимации карт</span>
+      <div class="settings-toggle-group">
+        <span class="stg-opt active" id="stg-normal">Обычный</span>
+        <label class="toggle-switch">
+          <input type="checkbox" id="toggle-fast-mode"/>
+          <span class="toggle-slider"></span>
+        </label>
+        <span class="stg-opt" id="stg-fast">Быстрый</span>
+      </div>
+    </div>
+    <div class="settings-row">
+      <span class="settings-label">Музыка</span>
+      <label class="toggle-switch">
+        <input type="checkbox" id="toggle-music" checked/>
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+    <div class="settings-desc">
+      <b>Обычный режим</b> — карты вылетают на экран при каждом ходу, большой текст объясняет что произошло.<br/>
+      <b>Быстрый режим</b> — без анимаций, мгновенный ход.
+    </div>
+    <button class="btn-close-bottom" id="settings-close">✕ Закрыть</button>
+  </div>
+</div>
+
+<script src="app.js?v=3"></script>
 </body>
 </html>

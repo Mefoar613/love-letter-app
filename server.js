@@ -1,11 +1,13 @@
 // =====================================================================
-// Тёмная Дуэль — Server v10 | 2-4 players, fixes, surrender
+// Тёмная Дуэль — Server v11 | 2-4 players, modes, admin panel
 // =====================================================================
 const express  = require('express');
 const http     = require('http');
 const path     = require('path');
 const mongoose = require('mongoose');
 const { Server } = require('socket.io');
+
+const ADMIN_ID = 'tg_1095004987';
 
 const app    = express();
 const server = http.createServer(app);
@@ -47,7 +49,6 @@ async function savePlayer(uid, data) {
 
 // ═══ КАРТЫ ═══
 const CARD_DEFS = {0:{count:2,name:'Информатор'},1:{count:6,name:'Детектив'},2:{count:2,name:'Журналист'},3:{count:2,name:'Громила'},4:{count:2,name:'Продажный коп'},5:{count:2,name:'Федерал'},6:{count:2,name:'Теневой брокер'},7:{count:1,name:'Босс мафии'},8:{count:1,name:'Роковая женщина'},9:{count:1,name:'Компромат'}};
-// Жетоны до победы: 2 игрока=6, 3=5, 4=4
 function winTokensFor(n) { return n<=2?6:n===3?5:4; }
 
 function buildDeck() {
@@ -63,7 +64,7 @@ const lobbies = new Map();
 class Lobby {
   constructor(id,creator){
     this.id=id; this.creatorId=creator.userId;
-    this.slots=[creator]; // до 4 слотов
+    this.slots=[creator];
     this.maxPlayers=2;
     this.started=false;
   }
@@ -113,7 +114,6 @@ class Room {
     const others=s.players.filter(p=>p.socketId!==forSocketId);
     const cur=s.players[s.turn];
 
-    // seenCounts для данного игрока
     const sc={};
     if(me&&this.seenCards[me.userId]){
       for(const val of this.seenCards[me.userId].values()) sc[val]=(sc[val]||0)+1;
@@ -141,7 +141,6 @@ class Room {
         tokens:this.tokens[o.userId]||0,isBot:!!o.isBot,back:o.back||'back',
         userId:o.userId,isTurn:cur?.userId===o.userId,
       })),
-      // Совместимость с 2-player клиентом
       opponent: others[0]?{
         name:others[0].name,avatar:others[0].avatar,handCount:others[0].hand.length,
         discard:others[0].discard,protected:others[0].protected,eliminated:others[0].eliminated,
@@ -176,7 +175,6 @@ function startRound(room, resetTokens=false){
   const deck=buildDeck();
   const burned=deck.shift();
 
-  // Исключённые карты: только для 2 игроков — 3 лицом вверх
   const excludedCards=[];
   if(room.playerCount===2){
     for(let i=0;i<3&&deck.length;i++){const c=deck.shift();excludedCards.push(c);addSeenAll(room,c);}
@@ -188,13 +186,9 @@ function startRound(room, resetTokens=false){
     hand:[],discard:[],protected:false,eliminated:false,mustPlayCountess:false,
   }));
 
-  // Раздаём по 1 карте каждому
   for(const pl of players){const c=deck.shift();pl.hand.push(c);addSeen(room,pl.userId,c);}
 
-  // РАНДОМ кто ходит первый
   const firstIdx=Math.floor(Math.random()*players.length);
-
-  // Первый игрок берёт вторую карту
   const c2=deck.shift();players[firstIdx].hand.push(c2);addSeen(room,players[firstIdx].userId,c2);
   updateCountess(players[firstIdx]);
 
@@ -226,7 +220,6 @@ function endRound(room,winnerId,reason){
   if(spy){room.tokens[spy]=(room.tokens[spy]||0)+1;const bn=room.players.find(p=>p.userId===spy)?.name;logMsg(room,`🃏 Бонус Информатора → +1 ${bn}`);}
 
   const wt=room.tokens[winnerId];
-  // Собираем счёт всех
   const scores=s.players.map(p=>({name:p.name,userId:p.userId,tokens:room.tokens[p.userId]||0}));
 
   if(wt>=room.winTokens){
@@ -286,7 +279,8 @@ function nextTurn(room){
 
   if(cur.isBot&&!s.roundOver&&!s.gameOver){
     emitState(room);
-    setTimeout(()=>botTurn(room),2500+Math.random()*1500);
+    // Увеличена задержка для нормального режима анимаций
+    setTimeout(()=>botTurn(room),3500+Math.random()*1500);
   }
 }
 
@@ -301,13 +295,11 @@ function playCard(room,socketId,payload){
   if(idx<0)return{error:'Карты нет.'};
   const card=me.hand[idx];
 
-  // ФИкс карты 8: проверяем ДО анимации
   if(me.mustPlayCountess&&card.value!==8)
     return{error:'Роковая женщина! Обязан сыграть карту 8.'};
 
   me.hand.splice(idx,1);me.discard.push(card);addSeenAll(room,card);
 
-  // Находим цель по targetUserId (для 3-4 игроков) или единственного соперника (для 2)
   let target=null;
   const aliveOpps=s.players.filter(p=>p.userId!==me.userId&&!p.eliminated);
   if(targetUserId){
@@ -325,17 +317,20 @@ function playCard(room,socketId,payload){
       if(!target||target.protected){logMsg(room,target?`${target.name} под защитой.`:'Нет цели.');break;}
       if(guess===undefined||guess<0||guess>9||guess===1)return rollback(room,me,card,'Назови 0-9, не 1.');
       const hit=target.hand[0]?.value===guess;
-      room.pendingVFX.push({type:'detective',guess,hit,targetCard:target.hand[0]?.value,targetName:target.name});
+      const hitMsg = hit
+        ? `🎯 ${me.name} угадал ${CARD_DEFS[guess].name} у ${target.name}!`
+        : `✗ Промах! У ${target.name} нет ${CARD_DEFS[guess].name}`;
+      room.pendingVFX.push({type:'detective',guess,hit,targetCard:target.hand[0]?.value,targetName:target.name,playerName:me.name,message:hitMsg});
       if(hit){
         addSeenAll(room,target.hand[0]);target.discard.push(...target.hand.splice(0));target.eliminated=true;
-        logMsg(room,`🎯 ${me.name} угадал ${CARD_DEFS[guess].name} у ${target.name}!`);
-      } else logMsg(room,`Промах! У ${target.name} нет ${CARD_DEFS[guess].name}.`);
+        logMsg(room,hitMsg);
+      } else logMsg(room,hitMsg);
       break;
     }
     case 2:{
       if(!target||target.protected)break;
       addSeen(room,me.userId,target.hand[0]);
-      room.pendingVFX.push({type:'journalist'});
+      room.pendingVFX.push({type:'journalist',playerName:me.name,message:`👀 ${me.name} подсмотрел карту ${target.name}`});
       if(!me.isBot)io.to(me.socketId).emit('peek',{playerName:target.name,card:target.hand[0],cardName:CARD_DEFS[target.hand[0]?.value]?.name});
       logMsg(room,`${me.name} изучает карту ${target.name}.`);
       break;
@@ -345,15 +340,16 @@ function playCard(room,socketId,payload){
       const mv=me.hand[0]?.value,ov=target.hand[0]?.value;
       if(mv===undefined||ov===undefined)break;
       let winnerId=null;
-      if(mv>ov){winnerId=me.userId;addSeenAll(room,target.hand[0]);target.discard.push(...target.hand.splice(0));target.eliminated=true;logMsg(room,`Разборка: ${me.name}(${mv}) > ${target.name}(${ov})`);}
-      else if(mv<ov){winnerId=target.userId;addSeenAll(room,me.hand[0]);me.discard.push(...me.hand.splice(0));me.eliminated=true;logMsg(room,`Разборка: ${me.name}(${mv}) < ${target.name}(${ov})`);}
-      else logMsg(room,`Ничья (${mv}=${ov}).`);
-      room.pendingVFX.push({type:'baron',p1Id:me.userId,p2Id:target.userId,p1Card:mv,p2Card:ov,winnerId});
+      let baronMsg='';
+      if(mv>ov){winnerId=me.userId;addSeenAll(room,target.hand[0]);target.discard.push(...target.hand.splice(0));target.eliminated=true;baronMsg=`⚔️ ${me.name}(${mv}) побеждает ${target.name}(${ov})!`;}
+      else if(mv<ov){winnerId=target.userId;addSeenAll(room,me.hand[0]);me.discard.push(...me.hand.splice(0));me.eliminated=true;baronMsg=`⚔️ ${target.name}(${ov}) побеждает ${me.name}(${mv})!`;}
+      else baronMsg=`⚔️ Ничья! Оба с картой ${mv}`;
+      logMsg(room,baronMsg);
+      room.pendingVFX.push({type:'baron',p1Id:me.userId,p2Id:target.userId,p1Card:mv,p2Card:ov,winnerId,p1Name:me.name,p2Name:target.name,message:baronMsg});
       break;
     }
-    case 4:me.protected=true;logMsg(room,`${me.name} под защитой.`);break;
+    case 4:me.protected=true;logMsg(room,`🛡 ${me.name} под защитой до следующего хода.`);break;
     case 5:{
-      // targetUserId может быть 'self' или конкретный userId
       let tgt;
       if(payload.targetUserId==='self'||payload.target==='self')tgt=me;
       else if(target&&!target.protected)tgt=target;
@@ -362,8 +358,9 @@ function playCard(room,socketId,payload){
       const dropped=tgt.hand.shift();tgt.discard.push(dropped);addSeenAll(room,dropped);
       if(dropped?.value===9){
         tgt.eliminated=true;
-        room.pendingVFX.push({type:'burn'});
-        logMsg(room,`💀 Федерал заставил ${tgt.name} сбросить Компромат!`);
+        const burnMsg=`💀 Федерал заставил ${tgt.name} сбросить Компромат!`;
+        room.pendingVFX.push({type:'burn',message:burnMsg});
+        logMsg(room,burnMsg);
       } else {
         if(s.deck.length>0){const nc=s.deck.shift();tgt.hand.push(nc);addSeen(room,tgt.userId,nc);}
         else if(s.burned){tgt.hand.push(s.burned);s.burned=null;}
@@ -389,14 +386,15 @@ function playCard(room,socketId,payload){
       if(target.hand[0])addSeen(room,me.userId,target.hand[0]);
       [me.hand,target.hand]=[target.hand,me.hand];
       updateCountess(me);updateCountess(target);
-      logMsg(room,`${me.name} и ${target.name} обмен картами.`);
+      logMsg(room,`🔀 ${me.name} и ${target.name} обменялись картами.`);
       break;
     }
     case 8:logMsg(room,`${me.name} сбрасывает Роковую женщину.`);break;
     case 9:{
       me.eliminated=true;
-      room.pendingVFX.push({type:'burn'});
-      logMsg(room,`💀 ${me.name} сбросил Компромат!`);
+      const burn9Msg=`💀 ${me.name} сбросил Компромат — выбывает!`;
+      room.pendingVFX.push({type:'burn',message:burn9Msg});
+      logMsg(room,burn9Msg);
       break;
     }
   }
@@ -445,7 +443,6 @@ function botTurn(room){
     payload.guess=bg;
   }
   if(chosen.value===5)payload.target=(opp&&!opp.protected)?'opp':'self';
-  // Для 3-4 игроков: выбираем случайного незащищённого соперника
   if([1,2,3,5,7].includes(chosen.value)&&aliveOpps.length>1){
     const unprotected=aliveOpps.filter(p=>!p.protected);
     const t=unprotected.length>0?unprotected[Math.floor(Math.random()*unprotected.length)]:aliveOpps[0];
@@ -488,7 +485,6 @@ io.on('connection',socket=>{
     const lobby=lobbies.get(socket.data.lobbyId);
     if(!lobby||lobby.creatorId!==socket.data.userId)return;
     lobby.setMaxPlayers(n);
-    // Удаляем лишних ботов если уменьшили
     while(lobby.slots.length>lobby.maxPlayers){
       const bot=lobby.slots.findLast(p=>p.isBot);
       if(bot)lobby.removePlayer(bot.userId);else break;
@@ -514,7 +510,6 @@ io.on('connection',socket=>{
 
   socket.on('remove_slot',uid=>{
     const lobby=lobbies.get(socket.data.lobbyId);if(!lobby||lobby.creatorId!==socket.data.userId)return;
-    // Можно удалить только бота или пустой слот
     const p=lobby.slots.find(s=>s.userId===uid&&s.isBot);
     if(p)lobby.removePlayer(uid);
     io.to(lobby.id).emit('lobby_joined',lobby.toPublic());broadcastLobbies();
@@ -560,16 +555,13 @@ io.on('connection',socket=>{
     nextTurn(room);emitState(room);
   });
 
-  // СДАТЬСЯ
   socket.on('surrender',()=>{
     const room=rooms.get(socket.data.roomId);if(!room||!room.state)return;
     const s=room.state;
     const me=s.players.find(p=>p.socketId===socket.id);if(!me)return;
     me.eliminated=true;
     logMsg(room,`💀 ${me.name} сдался!`);
-    // Уведомляем всех
     io.to(room.id).emit('player_surrendered',{name:me.name});
-    // Проверяем конец
     const alive=s.players.filter(p=>!p.eliminated);
     if(alive.length<=1&&alive[0]){
       endRound(room,alive[0].userId,`${me.name} сдался. Побеждает ${alive[0].name}.`);
@@ -583,6 +575,19 @@ io.on('connection',socket=>{
     for(const p of room.players){if(p.isBot)room.rematchVotes.add(p.userId);}
     if(room.rematchVotes.size>=room.players.length){startRound(room,true);io.to(room.id).emit('game_started');emitState(room);}
     else io.to(room.id).emit('rematch_pending',{count:room.rematchVotes.size});
+  });
+
+  // ═══ ADMIN EVENTS ═══
+  socket.on('admin_loh',()=>{
+    const room=rooms.get(socket.data.roomId);if(!room)return;
+    if(socket.data.userId!==ADMIN_ID)return;
+    io.to(room.id).emit('admin_vfx',{type:'loh'});
+  });
+
+  socket.on('throw_tomato',()=>{
+    const room=rooms.get(socket.data.roomId);if(!room)return;
+    if(socket.data.userId!==ADMIN_ID)return;
+    io.to(room.id).emit('tomato_vfx',{});
   });
 
   socket.on('leave_game',()=>cleanupGame(socket));
@@ -599,4 +604,4 @@ function cleanupGame(socket){
   socket.leave(socket.data.roomId);socket.data.roomId=null;
 }
 
-connectDB().then(()=>{const PORT=process.env.PORT||3000;server.listen(PORT,()=>console.log(`✨ Сервер v10 на порту ${PORT}`));});
+connectDB().then(()=>{const PORT=process.env.PORT||3000;server.listen(PORT,()=>console.log(`✨ Сервер v11 на порту ${PORT}`));});

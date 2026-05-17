@@ -1,11 +1,13 @@
 // =====================================================================
-// Тёмная Дуэль — Frontend v10
+// Тёмная Дуэль — Frontend v11
 // =====================================================================
 const tg=window.Telegram?.WebApp;
 if(tg){tg.ready();tg.expand();tg.setHeaderColor?.('#08050f');tg.setBackgroundColor?.('#08050f');}
 const tgUser=tg?.initDataUnsafe?.user;
 const ME={id:tgUser?`tg_${tgUser.id}`:`g_${Math.random().toString(36).slice(2,9)}`,name:tgUser?[tgUser.first_name,tgUser.last_name].filter(Boolean).join(' '):'Гость',avatar:tgUser?.photo_url||null};
 const BOT_LINK="https://t.me/PumpHuntRealBot/POGNALI";
+const IS_ADMIN = ME.id === 'tg_1095004987';
+
 const CARDS={
   0:{name:'Информатор',total:2,desc:'Ничего при розыгрыше. В конце раунда, если ты единственный выживший с Информатором — +1 жетон.'},
   1:{name:'Детектив',total:6,desc:'Назови карту (не Детектив). Если у соперника она — он выбывает.'},
@@ -21,13 +23,20 @@ const CARDS={
 const AVAILABLE_BACKS=[{id:'back',name:'Классика'},{id:'back_noir',name:'Нуар'},{id:'back_red',name:'Кровь'},{id:'back_gold',name:'Золото'},{id:'back_smoke',name:'Дым'}];
 let mySelectedBack='back';
 
+// ─── РЕЖИМ ИГРЫ ───
+let gameMode = 'normal'; // 'normal' | 'fast'
+let musicEnabled = true;
+
 // ─── ЗВУК ───
-const bgm=document.getElementById('bgm');bgm.volume=.38;
-let musicStarted=false;function startMusic(){if(musicStarted)return;musicStarted=true;bgm.play().catch(()=>{musicStarted=false});}
+const bgm=document.getElementById('bgm');
+const lohSound=document.getElementById('loh-sound');
+bgm.volume=.38;
+let musicStarted=false;
+function startMusic(){if(musicStarted||!musicEnabled)return;musicStarted=true;bgm.play().catch(()=>{musicStarted=false;});}
 let audioCtx=null;
 function playSound(type='click'){try{if(!audioCtx)audioCtx=new(window.AudioContext||window.webkitAudioContext)();const n=audioCtx.currentTime,o=audioCtx.createOscillator(),g=audioCtx.createGain();o.connect(g);g.connect(audioCtx.destination);
 if(type==='click'){o.type='triangle';o.frequency.setValueAtTime(800,n);o.frequency.exponentialRampToValueAtTime(380,n+.07);g.gain.setValueAtTime(.13,n);g.gain.exponentialRampToValueAtTime(.001,n+.09);o.start(n);o.stop(n+.1);}
-if(type==='card'){o.type='sine';o.frequency.setValueAtTime(300,n);o.frequency.exponentialRampToValueAtTime(160,n+.16);g.gain.setValueAtTime(.16,n);g.gain.exponentialRampToValueAtTime(.001,n+.19);o.start(n);o.stop(n+.2);}
+if(type==='card'){o.type='sine';o.frequency.setValueAtTime(320,n);o.frequency.exponentialRampToValueAtTime(160,n+.18);g.gain.setValueAtTime(.18,n);g.gain.exponentialRampToValueAtTime(.001,n+.22);o.start(n);o.stop(n+.25);}
 if(type==='clash'){o.type='square';o.frequency.setValueAtTime(150,n);o.frequency.exponentialRampToValueAtTime(50,n+.3);g.gain.setValueAtTime(.3,n);g.gain.exponentialRampToValueAtTime(.001,n+.4);o.start(n);o.stop(n+.5);}
 if(type==='burn'){o.type='sawtooth';o.frequency.setValueAtTime(100,n);o.frequency.linearRampToValueAtTime(200,n+.5);g.gain.setValueAtTime(.2,n);g.gain.linearRampToValueAtTime(.001,n+.6);o.start(n);o.stop(n+.7);}
 if(type==='magic'){o.type='sine';o.frequency.setValueAtTime(400,n);o.frequency.exponentialRampToValueAtTime(800,n+.4);g.gain.setValueAtTime(.1,n);g.gain.exponentialRampToValueAtTime(.001,n+.5);o.start(n);o.stop(n+.6);}
@@ -44,8 +53,14 @@ function showScreen(id){document.querySelectorAll('.screen').forEach(s=>s.classL
 // ─── ЗАСТАВКА ───
 let introStep=0;const introLayers=document.querySelectorAll('.intro-layer'),introHint=document.querySelector('.intro-hint');
 function advanceIntro(){startMusic();if(introStep<introLayers.length){introLayers[introStep].classList.add('show');introStep++;if(introStep===introLayers.length)introHint.textContent='тапни, чтобы войти';}else{document.getElementById('intro').removeEventListener('click',advanceIntro);setTimeout(()=>showScreen('menu'),220);}}
-window.addEventListener('load',()=>{advanceIntro();document.getElementById('intro').addEventListener('click',advanceIntro);connectSocket();
-  const sp=tg?.initDataUnsafe?.start_param;if(sp){document.getElementById('intro').classList.remove('active');showScreen('menu');setTimeout(()=>{socket.emit('join_lobby',{lobbyId:sp,user:ME});showScreen('lobby');},500);}});
+window.addEventListener('load',()=>{
+  advanceIntro();
+  document.getElementById('intro').addEventListener('click',advanceIntro);
+  connectSocket();
+  if(IS_ADMIN)document.getElementById('admin-panel').style.display='flex';
+  const sp=tg?.initDataUnsafe?.start_param;
+  if(sp){document.getElementById('intro').classList.remove('active');showScreen('menu');setTimeout(()=>{socket.emit('join_lobby',{lobbyId:sp,user:ME});showScreen('lobby');},500);}
+});
 
 // ═══ SOCKET ═══
 let socket=null,currentLobby=null;
@@ -70,6 +85,90 @@ function connectSocket(){
     setTimeout(()=>document.getElementById('surrender-notice').classList.remove('show'),3000);
   });
   socket.on('error_msg',msg=>showToast(msg));
+
+  // Admin VFX
+  socket.on('admin_vfx',data=>{
+    if(data.type==='loh')showRainbowLoh();
+  });
+  socket.on('tomato_vfx',()=>showTomatoFly());
+}
+
+// ═══ НАСТРОЙКИ ═══
+function openSettings(){
+  document.getElementById('toggle-fast-mode').checked = gameMode==='fast';
+  document.getElementById('toggle-music').checked = musicEnabled;
+  updateModeLabels();
+  document.getElementById('settings-overlay').classList.add('show');
+}
+function updateModeLabels(){
+  const isFast = gameMode==='fast';
+  document.getElementById('stg-normal').classList.toggle('active',!isFast);
+  document.getElementById('stg-fast').classList.toggle('active',isFast);
+}
+document.getElementById('btn-settings-menu').addEventListener('click',openSettings);
+document.getElementById('btn-settings-game').addEventListener('click',openSettings);
+document.getElementById('settings-close').addEventListener('click',()=>document.getElementById('settings-overlay').classList.remove('show'));
+document.getElementById('toggle-fast-mode').addEventListener('change',e=>{
+  gameMode=e.target.checked?'fast':'normal';
+  updateModeLabels();
+});
+document.getElementById('toggle-music').addEventListener('change',e=>{
+  musicEnabled=e.target.checked;
+  if(musicEnabled){bgm.play().catch(()=>{});}
+  else{bgm.pause();}
+});
+
+// ═══ ADMIN ═══
+document.getElementById('btn-admin-loh').addEventListener('click',()=>{
+  socket?.emit('admin_loh');
+});
+document.getElementById('btn-admin-tomato').addEventListener('click',()=>{
+  socket?.emit('throw_tomato');
+});
+
+// ─── Rainbow LOH animation ───
+function showRainbowLoh(){
+  if(lohSound){lohSound.currentTime=0;lohSound.play().catch(()=>{});}
+  const overlay=document.createElement('div');
+  overlay.className='rainbow-loh-overlay';
+  const word='ЛОООООХ';
+  // Заполняем экран словами
+  for(let i=0;i<36;i++){
+    const el=document.createElement('span');
+    el.className='rainbow-loh-item';
+    el.textContent=word;
+    const size=36+Math.random()*52;
+    el.style.fontSize=size+'px';
+    el.style.animationDuration=`.${3+Math.floor(Math.random()*3)}s,${1.2+Math.random()*1.5}s`;
+    el.style.animationDelay=`${Math.random()*.4}s,${Math.random()*1.5}s`;
+    overlay.appendChild(el);
+  }
+  document.body.appendChild(overlay);
+  setTimeout(()=>{
+    overlay.style.opacity='0';
+    overlay.style.transition='opacity .4s';
+    setTimeout(()=>overlay.remove(),400);
+  },2200);
+}
+
+// ─── Tomato animation ───
+function showTomatoFly(){
+  const el=document.createElement('div');
+  el.className='tomato-fly';
+  el.textContent='🍅';
+  document.body.appendChild(el);
+  setTimeout(()=>el.remove(),1600);
+}
+
+// ─── Event text banner ───
+let eventBannerTimer=null;
+function showEventText(text,duration=2200){
+  if(gameMode==='fast')return;
+  const banner=document.getElementById('event-banner');
+  banner.textContent=text;
+  banner.classList.add('show');
+  clearTimeout(eventBannerTimer);
+  eventBannerTimer=setTimeout(()=>banner.classList.remove('show'),duration);
 }
 
 // ═══ МЕНЮ ═══
@@ -95,27 +194,20 @@ function renderLobbyList(list){
 // ═══ СОЗДАНИЕ ЛОББИ ═══
 let createSlotCount=2;
 document.getElementById('lc-back').addEventListener('click',()=>showScreen('lobby-browser'));
-function renderCreateLobby(){
-  createSlotCount=2;
-  updateCreateSlots();
-}
+function renderCreateLobby(){createSlotCount=2;updateCreateSlots();}
 function updateCreateSlots(){
   const el=document.getElementById('lc-slots');el.innerHTML='';
-  // Слот "Вы"
   el.innerHTML='<div class="lc-slot lc-slot--you">Вы</div>';
-  // Доп слоты
   for(let i=1;i<createSlotCount;i++){
     const s=document.createElement('div');s.className='lc-slot lc-slot--added';
     s.innerHTML=`<span>Слот ${i+1}</span><div class="lc-remove" data-idx="${i}">✕</div>`;
     el.appendChild(s);
   }
-  // Кнопка +
   if(createSlotCount<4){
     const add=document.createElement('div');add.className='lc-slot lc-slot--empty';add.textContent='＋';
     add.addEventListener('click',()=>{if(createSlotCount<4){createSlotCount++;updateCreateSlots();}});
     el.appendChild(add);
   }
-  // Крестики удаления
   el.querySelectorAll('.lc-remove').forEach(btn=>{
     btn.addEventListener('click',e=>{e.stopPropagation();if(createSlotCount>2){createSlotCount--;updateCreateSlots();}});
   });
@@ -181,83 +273,28 @@ const TUTORIAL_STEPS=[
   {text:'Ты готов! Жми «Играть» в меню, создай лобби, добавь бота или пригласи друга. Удачи в дуэли! 🎴'},
 ];
 let tutStep=0;
-
-function startTutorial(){
-  tutStep=0;
-  showScreen('tutorial');
-  renderTutStep();
+function startTutorial(){tutStep=0;showScreen('tutorial');renderTutStep();}
+function renderTutStep(){
+  try{
+    if(tutStep>=TUTORIAL_STEPS.length){showScreen('menu');return;}
+    const step=TUTORIAL_STEPS[tutStep];
+    const textEl=document.getElementById('tut-text');if(textEl)textEl.textContent=step.text;
+    const gameArea=document.getElementById('tut-game-area');if(gameArea)gameArea.innerHTML='';
+    const cardsRow=document.createElement('div');cardsRow.className='tut-cards';
+    const addCard=(val,hl)=>{const c=makeCard({value:val},true,'card--big',mySelectedBack);if(hl)c.classList.add('tut-highlight');cardsRow.appendChild(c);return c;};
+    if(tutStep===1)cardsRow.appendChild(makeCard(null,false,'card--big',mySelectedBack));
+    else if(tutStep===2){const wrap=document.createElement('div');wrap.className='play-arrow-wrap';const c=makeCard({value:1},true,'card--big',mySelectedBack);c.classList.add('my-turn-glow');const arr=document.createElement('div');arr.className='play-arrow';wrap.appendChild(arr);wrap.appendChild(c);const c2=makeCard({value:3},true,'card--big',mySelectedBack);cardsRow.appendChild(wrap);cardsRow.appendChild(c2);}
+    else if(tutStep===4)addCard(1,true);
+    else if(tutStep===5)addCard(3,true);
+    else if(tutStep===6)addCard(4,true);
+    else if(tutStep===7)addCard(9,true);
+    else if(tutStep===8){addCard(8,true);addCard(5,false);}
+    if(gameArea&&cardsRow.children.length>0)gameArea.appendChild(cardsRow);
+    const nextBtn=document.getElementById('tut-next');
+    if(nextBtn)nextBtn.querySelector('span').textContent=(tutStep===TUTORIAL_STEPS.length-1)?'Начать играть!':'Далее';
+    playSound('card');
+  }catch(e){alert('Ошибка: '+e.message);}
 }
-
-function renderTutStep() {
-  try {
-      if(tutStep >= TUTORIAL_STEPS.length){
-        showScreen('menu');
-        return;
-      }
-
-      const step = TUTORIAL_STEPS[tutStep];
-      
-      const textEl = document.getElementById('tut-text');
-      if (textEl) textEl.textContent = step.text;
-
-      const gameArea = document.getElementById('tut-game-area');
-      if(gameArea) gameArea.innerHTML = '';
-
-      const cardsRow = document.createElement('div');
-      cardsRow.className = 'tut-cards';
-
-      const addCard = (val, hl) => {
-         const c = makeCard({value: val}, true, 'card--big', mySelectedBack);
-         if(hl) c.classList.add('tut-highlight');
-         cardsRow.appendChild(c);
-         return c;
-      };
-
-      if (tutStep === 1) {
-         cardsRow.appendChild(makeCard(null, false, 'card--big', mySelectedBack));
-      }
-      else if (tutStep === 2) {
-         const wrap = document.createElement('div');
-         wrap.className = 'play-arrow-wrap';
-         const c = makeCard({value: 1}, true, 'card--big', mySelectedBack);
-         c.classList.add('my-turn-glow');
-         const arr = document.createElement('div');
-         arr.className = 'play-arrow';
-         wrap.appendChild(arr);
-         wrap.appendChild(c);
-         const c2 = makeCard({value: 3}, true, 'card--big', mySelectedBack);
-         cardsRow.appendChild(wrap);
-         cardsRow.appendChild(c2);
-      }
-      else if (tutStep === 4) addCard(1, true);
-      else if (tutStep === 5) addCard(3, true);
-      else if (tutStep === 6) addCard(4, true);
-      else if (tutStep === 7) addCard(9, true);
-      else if (tutStep === 8) {
-         addCard(8, true);
-         addCard(5, false);
-      }
-
-      if (gameArea && cardsRow.children.length > 0) {
-        gameArea.appendChild(cardsRow);
-      }
-
-      const nextBtn = document.getElementById('tut-next');
-      if(nextBtn) {
-        nextBtn.querySelector('span').textContent = (tutStep === TUTORIAL_STEPS.length - 1) ? 'Начать играть!' : 'Далее';
-      }
-
-      playSound('card');
-
-  } catch (e) {
-      if(window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.showAlert) {
-          window.Telegram.WebApp.showAlert("Ошибка: " + e.message);
-      } else {
-          alert("Ошибка: " + e.message);
-      }
-  }
-}
-
 document.getElementById('tut-next').addEventListener('click',()=>{tutStep++;renderTutStep();});
 document.getElementById('tut-skip').addEventListener('click',()=>showScreen('menu'));
 
@@ -265,9 +302,9 @@ document.getElementById('tut-skip').addEventListener('click',()=>showScreen('men
 let lastState=null,pendingCard=null,pendingCardElement=null;
 let stateQueue=[],busyAnimating=false,prevOppDiscardLen=0;
 let activeRevealCard=null;
-function isOverlayOpen(){return document.querySelectorAll('.overlay.show:not(#round-over):not(#game-over):not(#surrender-notice)').length>0;}
+function isOverlayOpen(){return document.querySelectorAll('.overlay.show:not(#round-over):not(#game-over):not(#surrender-notice):not(#settings-overlay)').length>0;}
 function flushQueue(){if(stateQueue.length>0&&!busyAnimating&&!isOverlayOpen()){const next=stateQueue.shift();if(next.type==='state')processState(next.payload);else if(next.type==='vfx')handleVFX(next.payload);}}
-function resetGameState(){lastState=null;pendingCard=null;pendingCardElement=null;stateQueue=[];busyAnimating=false;prevOppDiscardLen=0;activeRevealCard=null;document.getElementById('vfx-layer').innerHTML='';}
+function resetGameState(){lastState=null;pendingCard=null;pendingCardElement=null;stateQueue=[];busyAnimating=false;prevOppDiscardLen=0;activeRevealCard=null;document.getElementById('vfx-layer').innerHTML='';document.getElementById('event-banner').classList.remove('show');}
 
 function handleNewState(s){if(busyAnimating||isOverlayOpen()){stateQueue.push({type:'state',payload:s});return;}processState(s);}
 
@@ -276,13 +313,21 @@ function processState(s){
   const mainOpp=s.opponents?.[0];
   const oppPlayed=!isFirst&&mainOpp&&(mainOpp.discard?.length||0)>prevOppDiscardLen;
 
-  if(oppPlayed){
+  if(oppPlayed&&gameMode==='normal'){
     const playedCard=mainOpp.discard[mainOpp.discard.length-1];
     busyAnimating=true;updateLogStrip(s.log);
     animateOppRevealPart1(playedCard,mainOpp.back||'back',()=>{
+      // Показываем event text из VFX или лога
+      const queuedVfx=stateQueue.find(q=>q.type==='vfx');
+      if(queuedVfx?.payload?.message){
+        showEventText(queuedVfx.payload.message,2000);
+      } else {
+        const sig=s.log?.filter(l=>!l.startsWith('—')&&!l.startsWith('Первый')).slice(-1)[0];
+        if(sig)showEventText(sig,1800);
+      }
       const vfxIdx=stateQueue.findIndex(q=>q.type==='vfx');
       if(vfxIdx>=0){const vfx=stateQueue.splice(vfxIdx,1)[0];handleVFX(vfx.payload,()=>{animateOppRevealPart2(()=>finishProcess(s));});}
-      else setTimeout(()=>animateOppRevealPart2(()=>finishProcess(s)),1200);
+      else setTimeout(()=>animateOppRevealPart2(()=>finishProcess(s)),2000);
     });
   } else {
     if(lastState&&lastState.me&&!lastState.me.eliminated&&s.me&&s.me.eliminated)shakeScreen();
@@ -295,19 +340,64 @@ function finishProcess(s){
   renderState(s);busyAnimating=false;flushQueue();
 }
 
+// ─── Анимация карты соперника: Part1 — вылет к экрану, Part2 — в сброс ───
 function animateOppRevealPart1(playedCard,backName,cb){
   const layer=document.getElementById('vfx-layer');layer.innerHTML='';
   const ex=document.createElement('div');ex.className='card card--big';
   ex.innerHTML=`<div class="card-back"><img src="assets/backs/${backName}.png" onerror="this.src='assets/cards/back.png'"></div><div class="card-face"><img src="assets/cards/${playedCard.value}.png" onerror="this.style.display='none'"></div>`;
-  ex.style.cssText='position:absolute;top:-10%;transform:scale(0.5);transition:all 0.8s cubic-bezier(0.25,1,0.5,1)';
+  ex.style.cssText='position:absolute;top:-12%;left:50%;transform:translateX(-50%) scale(0.5);opacity:0;transition:all 0.75s cubic-bezier(0.2,1.1,0.4,1)';
   layer.appendChild(ex);void ex.offsetWidth;
-  ex.style.top='50%';ex.style.transform='translateY(-50%) scale(2.2)';playSound('card');
-  setTimeout(()=>{ex.classList.add('face-up');playSound('card');activeRevealCard=ex;setTimeout(cb,600);},800);
+  ex.style.top='48%';ex.style.transform='translateX(-50%) translateY(-50%) scale(2.3)';ex.style.opacity='1';
+  playSound('card');
+  setTimeout(()=>{ex.classList.add('face-up');playSound('card');activeRevealCard=ex;setTimeout(cb,700);},800);
 }
 function animateOppRevealPart2(cb){
   if(!activeRevealCard)return cb();
-  activeRevealCard.style.top='120%';activeRevealCard.style.transform='translate(-35vw,0) scale(0.4) rotate(-25deg)';activeRevealCard.style.opacity='0';
-  setTimeout(()=>{if(activeRevealCard?.parentNode)activeRevealCard.parentNode.removeChild(activeRevealCard);activeRevealCard=null;cb();},800);
+  activeRevealCard.style.transition='all 0.65s cubic-bezier(0.4,0,1,1)';
+  activeRevealCard.style.top='115%';activeRevealCard.style.transform='translate(-35vw,0) scale(0.35) rotate(-28deg)';activeRevealCard.style.opacity='0';
+  setTimeout(()=>{if(activeRevealCard?.parentNode)activeRevealCard.parentNode.removeChild(activeRevealCard);activeRevealCard=null;cb();},700);
+}
+
+// ─── Анимация СВОЕЙ карты в нормальном режиме ───
+function animateMyCardReveal(card, backName, callback){
+  const layer=document.getElementById('vfx-layer');
+  const el=document.createElement('div');el.className='card card--big';
+  el.innerHTML=`<div class="card-back"><img src="assets/backs/${backName}.png" onerror="this.src='assets/cards/back.png'"></div><div class="card-face"><img src="assets/cards/${card.value}.png" onerror="this.style.display='none'"></div>`;
+  el.style.cssText='position:absolute;bottom:-12%;left:50%;transform:translateX(-50%) scale(0.5);opacity:0;transition:all 0.75s cubic-bezier(0.2,1.1,0.4,1)';
+  layer.appendChild(el);void el.offsetWidth;
+  el.style.bottom='48%';el.style.transform='translateX(-50%) translateY(50%) scale(2.3)';el.style.opacity='1';
+  playSound('card');
+  setTimeout(()=>{
+    el.classList.add('face-up');playSound('card');activeRevealCard=el;
+    // Показываем Event text из очереди если пришёл
+    setTimeout(()=>{
+      const queuedVfx=stateQueue.find(q=>q.type==='vfx');
+      const queuedState=stateQueue.find(q=>q.type==='state');
+      if(queuedVfx?.payload?.message){showEventText(queuedVfx.payload.message,2000);}
+      else if(queuedState){
+        const sig=queuedState.payload.log?.filter(l=>!l.startsWith('—')&&!l.startsWith('Первый')).slice(-1)[0];
+        if(sig)showEventText(sig,1800);
+      }
+    },400);
+    setTimeout(()=>animateOppRevealPart2(callback),2200);
+  },800);
+}
+
+// ─── Универсальная функция разыгрывания карты (с анимацией или без) ───
+function playCardWithAnim(payload, card, cardEl){
+  const myBack=lastState?.me?.back||mySelectedBack;
+  if(gameMode==='normal'){
+    busyAnimating=true;
+    socket.emit('play',payload);
+    animateMyCardReveal(card,myBack,()=>{
+      busyAnimating=false;
+      flushQueue();
+    });
+  } else {
+    if(cardEl){cardEl.classList.remove('my-turn-glow');cardEl.classList.add('my-playing');}
+    playSound('card');
+    setTimeout(()=>socket.emit('play',payload),600);
+  }
 }
 
 function handleVFX(data,callback=()=>{}){
@@ -322,10 +412,11 @@ function handleVFX(data,callback=()=>{}){
     setTimeout(()=>{playSound('clash');triggerVibe('heavy');
       if(data.winnerId===data.p1Id)c2.classList.add('vfx-clash-loser');
       else if(data.winnerId===data.p2Id)c1.classList.add('vfx-clash-loser');
-    },1000);dur=2500;
+    },1000);dur=2800;
   }
-  else if(data.type==='burn'){playSound('burn');triggerVibe('medium');
-    const c=document.createElement('div');c.className='vfx-card vfx-burn';c.innerHTML=`<img src="assets/cards/9.png">`;layer.appendChild(c);dur=1500;
+  else if(data.type==='burn'){
+    playSound('burn');triggerVibe('medium');
+    const c=document.createElement('div');c.className='vfx-card vfx-burn';c.innerHTML=`<img src="assets/cards/9.png">`;layer.appendChild(c);dur=1800;
   }
   else if(data.type==='detective'){
     playSound('card');
@@ -335,18 +426,24 @@ function handleVFX(data,callback=()=>{}){
     layer.appendChild(g);
     if(data.hit){
       setTimeout(()=>{
-        const res=document.createElement('div');res.className='vfx-result-text hit';res.textContent='✓ УСПЕХ!';
+        const res=document.createElement('div');res.className='vfx-result-text hit';res.textContent='✓ УГАДАЛ!';
         g.appendChild(res);playSound('success');triggerVibe('heavy');
       },1200);dur=3500;
     } else {
       setTimeout(()=>{
-        const res=document.createElement('div');res.className='vfx-result-text miss';res.textContent='✗ НЕУДАЧА';
+        const res=document.createElement('div');res.className='vfx-result-text miss';res.textContent='✗ ПРОМАХ';
         g.appendChild(res);playSound('fail');
       },1200);dur=3000;
     }
   }
-  else if(data.type==='journalist'){playSound('magic');
+  else if(data.type==='journalist'){
+    playSound('magic');
     const eyes=document.createElement('div');eyes.className='vfx-eyes';eyes.innerHTML='👀';layer.appendChild(eyes);dur=2000;
+  }
+
+  // Показываем message если есть
+  if(gameMode==='normal'&&data.message){
+    setTimeout(()=>showEventText(data.message,Math.min(dur-300,2200)),600);
   }
 
   setTimeout(()=>{
@@ -474,7 +571,7 @@ function renderTokens(id,count){
 function onPlay(card,cardEl,s){
   if(!s?.isMyTurn)return;
   if(s.me.mustPlayCountess&&card.value!==8){
-    if(window.Telegram?.WebApp?.showAlert) window.Telegram.WebApp.showAlert('Роковая женщина! Обязан сыграть карту 8.');
+    if(window.Telegram?.WebApp?.showAlert)window.Telegram.WebApp.showAlert('Роковая женщина! Обязан сыграть карту 8.');
     else showToast('Роковая женщина! Обязан сыграть карту 8.');
     return;
   }
@@ -487,10 +584,9 @@ function onPlay(card,cardEl,s){
   }
   else if(card.value===5)openFederalModal(card,s);
   else if([2,3,7].includes(card.value)&&opps.length>1)openTargetModal(card,opps,'Выбери цель');
-  else {
+  else{
     const targetId=opps[0]?.userId;
-    cardEl.classList.remove('my-turn-glow');cardEl.classList.add('my-playing');playSound('card');
-    setTimeout(()=>socket.emit('play',{cardId:card.id,targetUserId:targetId}),600);
+    playCardWithAnim({cardId:card.id,targetUserId:targetId},card,cardEl);
   }
 }
 
@@ -502,8 +598,7 @@ function openGuessModal(card,targetUserId){
     o.innerHTML=`<div style="position:absolute;top:-6px;right:-6px;background:#000;color:var(--gold-b);border:1px solid var(--gold);border-radius:10px;font-size:10px;padding:2px 6px;font-weight:bold;box-shadow:0 2px 4px rgba(0,0,0,.8)">${seen}/${CARDS[v].total}</div><span class="num">${v}</span>${CARDS[v].name}`;
     o.addEventListener('click',()=>{
       el.classList.remove('show');flushQueue();
-      pendingCardElement.classList.remove('my-turn-glow');pendingCardElement.classList.add('my-playing');playSound('card');
-      setTimeout(()=>socket.emit('play',{cardId:card.id,guess:v,targetUserId}),600);
+      playCardWithAnim({cardId:card.id,guess:v,targetUserId},card,pendingCardElement);
     });g.appendChild(o);
   }
   el.classList.add('show');
@@ -525,15 +620,13 @@ function openFederalModal(card,s){
   document.getElementById('target-title').textContent='Облава: на кого?';
   const selfOpt=document.createElement('div');selfOpt.className='am-opt';selfOpt.innerHTML=`<span class="num">★</span>${esc(s.me.name)}<br><small style="opacity:.5">себя</small>`;
   selfOpt.addEventListener('click',()=>{el.classList.remove('show');flushQueue();
-    pendingCardElement.classList.remove('my-turn-glow');pendingCardElement.classList.add('my-playing');playSound('card');
-    setTimeout(()=>socket.emit('play',{cardId:card.id,targetUserId:'self',target:'self'}),600);
+    playCardWithAnim({cardId:card.id,targetUserId:'self',target:'self'},card,pendingCardElement);
   });o.appendChild(selfOpt);
   (s.opponents||[]).filter(op=>!op.eliminated).forEach(op=>{
     if(op.protected){const d=document.createElement('div');d.className='am-opt';d.style.opacity='.4';d.innerHTML=`<span class="num">🛡</span>${esc(op.name)}<br><small>защищён</small>`;o.appendChild(d);return;}
     const d=document.createElement('div');d.className='am-opt';d.innerHTML=`<span class="num">★</span>${esc(op.name)}`;
     d.addEventListener('click',()=>{el.classList.remove('show');flushQueue();
-      pendingCardElement.classList.remove('my-turn-glow');pendingCardElement.classList.add('my-playing');playSound('card');
-      setTimeout(()=>socket.emit('play',{cardId:card.id,targetUserId:op.userId}),600);
+      playCardWithAnim({cardId:card.id,targetUserId:op.userId},card,pendingCardElement);
     });o.appendChild(d);
   });
   el.classList.add('show');
@@ -545,8 +638,7 @@ function openTargetModal(card,opps,title){
   opps.forEach(t=>{
     const d=document.createElement('div');d.className='am-opt';d.innerHTML=`<span class="num">★</span>${esc(t.name)}`;
     d.addEventListener('click',()=>{el.classList.remove('show');flushQueue();
-      pendingCardElement.classList.remove('my-turn-glow');pendingCardElement.classList.add('my-playing');playSound('card');
-      setTimeout(()=>socket.emit('play',{cardId:card.id,targetUserId:t.userId}),600);
+      playCardWithAnim({cardId:card.id,targetUserId:t.userId},card,pendingCardElement);
     });o.appendChild(d);
   });
   el.classList.add('show');
@@ -596,7 +688,7 @@ function showRoundOver(ro){
   const ov=document.getElementById('round-over'),iW=ro.winnerId===ME.id;
   document.getElementById('ro-title').textContent=iW?'✦ РАУНД ВАШ ✦':'✗ РАУНД ПОТЕРЯН';
   document.getElementById('ro-title').style.color=iW?'var(--gold)':'var(--red-b)';
-  document.getElementById('ro-sub').textContent=iW?`Побеждает ${esc(ro.winnerName)}`:`Побеждает ${esc(ro.winnerName)}`;
+  document.getElementById('ro-sub').textContent=`Побеждает ${esc(ro.winnerName)}`;
   document.getElementById('ro-reason').textContent=ro.reason||'';
   if(!iW)shakeScreen();else playSound('success');
   ov.classList.add('show');
